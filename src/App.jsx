@@ -4,7 +4,7 @@ import {
   Home, BookOpen, Trophy, Plus, X, UploadCloud, 
   MessageCircle, Mic, MicOff, Camera, CameraOff, PhoneOff, 
   Lock, Image as ImageIcon, Sparkles, User, LogOut,
-  Send, Trash2, Edit3, Pin, Flame
+  Send, Trash2, Edit3, Pin, Flame, Smile
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -30,6 +30,7 @@ const App = () => {
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [discussionTopic, setDiscussionTopic] = useState("Introduction: First Impressions?");
+  const [showEmoji, setShowEmoji] = useState(false); // NEW: Emoji toggle
   
   // Forms & Loading
   const [isUploading, setIsUploading] = useState(false); 
@@ -45,6 +46,7 @@ const App = () => {
   const [cameraOn, setCameraOn] = useState(true);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const chatBottomRef = useRef(null); // NEW: Auto-scroll
 
   // --- 1. INITIALIZATION ---
   useEffect(() => {
@@ -65,14 +67,31 @@ const App = () => {
     if (session) {
       fetchBooks();
       fetchMessages();
+      // Listen for NEW messages only (to avoid duplicates with optimistic updates)
       const channel = supabase
         .channel('public:messages')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, 
-            (payload) => setChatMessages(prev => [...prev, payload.new]))
+            (payload) => {
+              // Only add if we don't already have this ID (prevents double bubbles)
+              setChatMessages(prev => {
+                if (prev.find(m => m.id === payload.new.id)) return prev;
+                return [...prev, payload.new];
+              });
+            })
+        // Listen for DELETES
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, 
+            (payload) => {
+              setChatMessages(prev => prev.filter(msg => msg.id !== payload.old.id));
+            })
         .subscribe();
       return () => supabase.removeChannel(channel);
     }
   }, [session]);
+
+  // Scroll to bottom on new message
+  useEffect(() => {
+    if (chatBottomRef.current) chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, activeTab]);
 
   // --- 2. AUTH FUNCTIONS ---
   const handleAuth = async (e) => {
@@ -130,36 +149,79 @@ const App = () => {
     setChatMessages(data || []);
   }
 
+  // --- 4. CHAT UPGRADES (Optimistic + Delete + Emoji) ---
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !profile) return;
-    await supabase.from('messages').insert([{ content: newMessage, user_id: session.user.id, username: profile.username || "Member", avatar_url: profile.avatar_url }]);
-    setNewMessage("");
+    
+    const msgText = newMessage;
+    setNewMessage(""); // Clear input instantly
+    setShowEmoji(false);
+
+    // 1. Optimistic Update (Show it immediately with a temporary ID)
+    const tempId = Date.now();
+    const tempMsg = {
+        id: tempId,
+        content: msgText,
+        user_id: session.user.id,
+        username: profile.username || "Member",
+        avatar_url: profile.avatar_url,
+        created_at: new Date().toISOString(),
+        pending: true // Mark as sending
+    };
+    setChatMessages(prev => [...prev, tempMsg]);
+
+    // 2. Send to DB
+    const { data, error } = await supabase.from('messages').insert([{
+        content: msgText,
+        user_id: session.user.id,
+        username: profile.username || "Member",
+        avatar_url: profile.avatar_url
+    }]).select();
+
+    // 3. If failed, remove the temp message (In real app, show error)
+    if (error) {
+        setChatMessages(prev => prev.filter(m => m.id !== tempId));
+        alert("Failed to send");
+    } else {
+        // Replace temp message with real one from DB (to get real ID)
+        setChatMessages(prev => prev.map(m => m.id === tempId ? data[0] : m));
+    }
   };
 
-  // --- 4. SMART VOTE LOGIC (THE FIX) ---
+  const handleDeleteMessage = async (id) => {
+    if(!window.confirm("Delete this message?")) return;
+    
+    // Optimistic Delete
+    setChatMessages(prev => prev.filter(m => m.id !== id));
+    
+    // DB Delete
+    await supabase.from('messages').delete().eq('id', id);
+  };
+
+  const addEmoji = (emoji) => {
+    setNewMessage(prev => prev + emoji);
+  };
+
+  // --- 5. SMART VOTE LOGIC ---
   const handleVote = async (book) => {
     const userId = session.user.id;
-    let currentVoters = book.voted_by || []; // Get the list of people who voted
+    let currentVoters = book.voted_by || [];
     let newVoters;
 
     if (currentVoters.includes(userId)) {
-        // If I already voted, REMOVE me (Unvote)
         newVoters = currentVoters.filter(id => id !== userId);
     } else {
-        // If I haven't voted, ADD me (Vote)
         newVoters = [...currentVoters, userId];
     }
 
-    // Optimistic Update (Update screen instantly)
     const updatedBooks = libraryBooks.map(b => b.id === book.id ? {...b, voted_by: newVoters} : b);
     setLibraryBooks(updatedBooks);
     
-    // DB Update
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- 5. UPLOAD & DELETE ---
+  // --- 6. UPLOAD & DELETE ---
   const closeAndResetForm = () => {
     setShowUploadForm(false); setNewBookTitle(""); setNewBookAuthor(""); setSelectedPdf(null); setSelectedCover(null); setIsUploading(false);
   };
@@ -183,7 +245,6 @@ const App = () => {
         coverUrl = publicUrl;
       }
 
-      // Initialize with empty array for votes
       await supabase.from('books').insert([{ title: newBookTitle, author: newBookAuthor, cover: coverUrl, pdf_url: pdfUrl, voted_by: [] }]);
       fetchBooks();
       closeAndResetForm();
@@ -197,7 +258,7 @@ const App = () => {
     if (!error) setLibraryBooks(libraryBooks.filter(book => book.id !== id));
   };
 
-  // --- 6. VIDEO & ADMIN ---
+  // --- 7. VIDEO & ADMIN ---
   const handleAdminToggle = () => {
     if (isAdmin) setIsAdmin(false);
     else if (window.prompt("Enter Admin PIN:") === ADMIN_PIN) setIsAdmin(true);
@@ -349,20 +410,40 @@ const App = () => {
                    <p className="text-sm font-medium text-indigo-100 pr-6">"{discussionTopic}"</p>
                    {isAdmin && <button onClick={handleUpdateTopic} className="absolute top-4 right-4 text-indigo-400 hover:text-white"><Edit3 size={14}/></button>}
                 </div>
-                <div className="flex-1 space-y-4 overflow-y-auto mb-4 scrollbar-hide">
+                
+                {/* MESSAGES AREA */}
+                <div className="flex-1 space-y-4 overflow-y-auto mb-4 scrollbar-hide px-1">
                     {chatMessages.map(msg => (
-                        <div key={msg.id} className={`flex gap-3 ${msg.user_id === session.user.id ? 'flex-row-reverse' : ''}`}>
+                        <div key={msg.id} className={`flex gap-3 group ${msg.user_id === session.user.id ? 'flex-row-reverse' : ''}`}>
                             <img src={msg.avatar_url || "https://via.placeholder.com/30"} className="w-8 h-8 rounded-full object-cover bg-gray-700"/>
-                            <div className={`p-3 rounded-2xl max-w-[80%] ${msg.user_id === session.user.id ? 'bg-indigo-600 rounded-tr-none' : 'bg-gray-800 rounded-tl-none'}`}>
+                            <div className={`relative p-3 rounded-2xl max-w-[80%] ${msg.user_id === session.user.id ? 'bg-indigo-600 rounded-tr-none' : 'bg-gray-800 rounded-tl-none'}`}>
                                 <p className="text-[10px] font-bold opacity-50 mb-1">{msg.username}</p>
                                 <p className="text-sm">{msg.content}</p>
+                                {msg.pending && <span className="text-[9px] opacity-60 italic mt-1 block text-right">sending...</span>}
+                                {/* DELETE BUTTON (Only shows on your messages) */}
+                                {msg.user_id === session.user.id && !msg.pending && (
+                                    <button onClick={() => handleDeleteMessage(msg.id)} className="absolute -top-2 -left-2 bg-red-500 p-1 rounded-full text-white opacity-0 group-hover:opacity-100 transition shadow-md"><Trash2 size={10}/></button>
+                                )}
                             </div>
                         </div>
                     ))}
+                    <div ref={chatBottomRef} />
                 </div>
-                <form onSubmit={handleSendMessage} className="flex gap-2 bg-gray-900 p-2 rounded-2xl border border-white/10">
+
+                {/* EMOJI BAR */}
+                {showEmoji && (
+                  <div className="bg-gray-900 border border-white/10 rounded-2xl p-2 mb-2 flex gap-2 overflow-x-auto">
+                    {["❤️","🔥","😂","👍","👏","🎉","📚","💡","👀","🚀"].map(e => (
+                      <button key={e} onClick={() => addEmoji(e)} className="text-xl p-2 hover:bg-white/10 rounded-lg transition">{e}</button>
+                    ))}
+                  </div>
+                )}
+
+                {/* INPUT AREA */}
+                <form onSubmit={handleSendMessage} className="flex gap-2 bg-gray-900 p-2 rounded-2xl border border-white/10 items-center">
+                    <button type="button" onClick={() => setShowEmoji(!showEmoji)} className={`p-2 rounded-xl transition ${showEmoji ? 'text-indigo-400' : 'text-gray-400'}`}><Smile size={20}/></button>
                     <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Say something..." className="flex-1 bg-transparent px-2 text-sm focus:outline-none" />
-                    <button className="bg-indigo-600 p-3 rounded-xl"><Send size={18}/></button>
+                    <button className="bg-indigo-600 p-3 rounded-xl hover:bg-indigo-500 transition"><Send size={18}/></button>
                 </form>
             </div>
         )}
