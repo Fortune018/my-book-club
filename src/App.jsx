@@ -122,35 +122,40 @@ const App = () => {
     if (data) await supabase.from('profiles').update({ last_seen: new Date() }).eq('id', userId);
   };
 
-  // --- INSTANT AVATAR UPDATE (THE FIX) ---
   const handleUpdateAvatar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    // 1. Size Check
     if (file.size > 2 * 1024 * 1024) return alert("Image too big! Keep it under 2MB.");
 
-    // 2. Instant Preview
     const objectUrl = URL.createObjectURL(file);
     setProfile(prev => ({ ...prev, avatar_url: objectUrl }));
-    
     setIsUploading(true);
 
     try {
       const fileName = `avatar-${Date.now()}-${session.user.id}`;
       const { error: uploadError } = await supabase.storage.from('book-files').upload(fileName, file);
       if (uploadError) throw uploadError;
-
       const { data: { publicUrl } } = supabase.storage.from('book-files').getPublicUrl(fileName);
-      
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', session.user.id);
-      
     } catch (error) {
       alert("Error uploading image");
-      fetchProfile(session.user.id); // Revert if failed
+      fetchProfile(session.user.id);
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // --- NEW: UPDATE USERNAME FUNCTION ---
+  const handleUpdateUsername = async () => {
+    const newName = window.prompt("Enter your new display name:", profile?.username || "");
+    if (!newName) return; // User cancelled
+
+    // Update Local State instantly
+    setProfile(prev => ({ ...prev, username: newName }));
+
+    // Update DB
+    const { error } = await supabase.from('profiles').update({ username: newName }).eq('id', session.user.id);
+    if (error) alert("Could not save name");
   };
 
   // --- 3. DATA FUNCTIONS ---
@@ -343,7 +348,11 @@ const App = () => {
                     {profile?.avatar_url ? <img src={profile.avatar_url} className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-4 border-indigo-500" /> : <div className="w-24 h-24 bg-gray-800 rounded-full mx-auto mb-4 flex items-center justify-center border-4 border-gray-700"><User size={40}/></div>}
                     <label className="absolute bottom-4 right-0 bg-white text-black p-2 rounded-full cursor-pointer hover:scale-110 transition"><Camera size={14}/><input type="file" accept="image/*" className="hidden" onChange={handleUpdateAvatar}/></label>
                 </div>
-                <h3 className="text-xl font-bold">{profile?.username || "Update Name"}</h3>
+                {/* --- UPDATE NAME BUTTON (Interactive Now) --- */}
+                <button onClick={handleUpdateUsername} className="flex items-center gap-2 mx-auto justify-center hover:opacity-80 transition">
+                    <h3 className="text-xl font-bold">{profile?.username || "Update Name"}</h3>
+                    <Edit3 size={14} className="text-gray-500"/>
+                </button>
                 <p className="text-gray-500 text-sm">Member since 2026</p>
              </div>
              <div className="grid grid-cols-2 gap-4">
@@ -353,6 +362,9 @@ const App = () => {
           </div>
         )}
 
+        {/* ... Rest of app (Library, Vote, Chat, etc.) is the same ... */}
+        {/* I am omitting the bottom half here to save space, but you can paste the FULL file above which includes everything! */}
+        
         {!isCallActive && activeTab === 'library' && (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-between items-end px-1">
