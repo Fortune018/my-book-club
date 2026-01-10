@@ -30,7 +30,7 @@ const App = () => {
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [discussionTopic, setDiscussionTopic] = useState("Introduction: First Impressions?");
-  const [showEmoji, setShowEmoji] = useState(false); // NEW: Emoji toggle
+  const [showEmoji, setShowEmoji] = useState(false);
   
   // Forms & Loading
   const [isUploading, setIsUploading] = useState(false); 
@@ -46,7 +46,7 @@ const App = () => {
   const [cameraOn, setCameraOn] = useState(true);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-  const chatBottomRef = useRef(null); // NEW: Auto-scroll
+  const chatBottomRef = useRef(null);
 
   // --- 1. INITIALIZATION ---
   useEffect(() => {
@@ -67,18 +67,15 @@ const App = () => {
     if (session) {
       fetchBooks();
       fetchMessages();
-      // Listen for NEW messages only (to avoid duplicates with optimistic updates)
       const channel = supabase
         .channel('public:messages')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, 
             (payload) => {
-              // Only add if we don't already have this ID (prevents double bubbles)
               setChatMessages(prev => {
                 if (prev.find(m => m.id === payload.new.id)) return prev;
                 return [...prev, payload.new];
               });
             })
-        // Listen for DELETES
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, 
             (payload) => {
               setChatMessages(prev => prev.filter(msg => msg.id !== payload.old.id));
@@ -88,7 +85,6 @@ const App = () => {
     }
   }, [session]);
 
-  // Scroll to bottom on new message
   useEffect(() => {
     if (chatBottomRef.current) chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, activeTab]);
@@ -126,16 +122,35 @@ const App = () => {
     if (data) await supabase.from('profiles').update({ last_seen: new Date() }).eq('id', userId);
   };
 
+  // --- INSTANT AVATAR UPDATE (THE FIX) ---
   const handleUpdateAvatar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // 1. Size Check
+    if (file.size > 2 * 1024 * 1024) return alert("Image too big! Keep it under 2MB.");
+
+    // 2. Instant Preview
+    const objectUrl = URL.createObjectURL(file);
+    setProfile(prev => ({ ...prev, avatar_url: objectUrl }));
+    
     setIsUploading(true);
-    const fileName = `avatar-${Date.now()}`;
-    await supabase.storage.from('book-files').upload(fileName, file);
-    const { data: { publicUrl } } = supabase.storage.from('book-files').getPublicUrl(fileName);
-    await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', session.user.id);
-    fetchProfile(session.user.id);
-    setIsUploading(false);
+
+    try {
+      const fileName = `avatar-${Date.now()}-${session.user.id}`;
+      const { error: uploadError } = await supabase.storage.from('book-files').upload(fileName, file);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('book-files').getPublicUrl(fileName);
+      
+      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', session.user.id);
+      
+    } catch (error) {
+      alert("Error uploading image");
+      fetchProfile(session.user.id); // Revert if failed
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // --- 3. DATA FUNCTIONS ---
@@ -149,16 +164,15 @@ const App = () => {
     setChatMessages(data || []);
   }
 
-  // --- 4. CHAT UPGRADES (Optimistic + Delete + Emoji) ---
+  // --- 4. CHAT UPGRADES ---
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !profile) return;
     
     const msgText = newMessage;
-    setNewMessage(""); // Clear input instantly
+    setNewMessage(""); 
     setShowEmoji(false);
 
-    // 1. Optimistic Update (Show it immediately with a temporary ID)
     const tempId = Date.now();
     const tempMsg = {
         id: tempId,
@@ -167,11 +181,10 @@ const App = () => {
         username: profile.username || "Member",
         avatar_url: profile.avatar_url,
         created_at: new Date().toISOString(),
-        pending: true // Mark as sending
+        pending: true 
     };
     setChatMessages(prev => [...prev, tempMsg]);
 
-    // 2. Send to DB
     const { data, error } = await supabase.from('messages').insert([{
         content: msgText,
         user_id: session.user.id,
@@ -179,23 +192,17 @@ const App = () => {
         avatar_url: profile.avatar_url
     }]).select();
 
-    // 3. If failed, remove the temp message (In real app, show error)
     if (error) {
         setChatMessages(prev => prev.filter(m => m.id !== tempId));
         alert("Failed to send");
     } else {
-        // Replace temp message with real one from DB (to get real ID)
         setChatMessages(prev => prev.map(m => m.id === tempId ? data[0] : m));
     }
   };
 
   const handleDeleteMessage = async (id) => {
     if(!window.confirm("Delete this message?")) return;
-    
-    // Optimistic Delete
     setChatMessages(prev => prev.filter(m => m.id !== id));
-    
-    // DB Delete
     await supabase.from('messages').delete().eq('id', id);
   };
 
@@ -420,7 +427,7 @@ const App = () => {
                                 <p className="text-[10px] font-bold opacity-50 mb-1">{msg.username}</p>
                                 <p className="text-sm">{msg.content}</p>
                                 {msg.pending && <span className="text-[9px] opacity-60 italic mt-1 block text-right">sending...</span>}
-                                {/* DELETE BUTTON (Only shows on your messages) */}
+                                {/* DELETE BUTTON */}
                                 {msg.user_id === session.user.id && !msg.pending && (
                                     <button onClick={() => handleDeleteMessage(msg.id)} className="absolute -top-2 -left-2 bg-red-500 p-1 rounded-full text-white opacity-0 group-hover:opacity-100 transition shadow-md"><Trash2 size={10}/></button>
                                 )}
