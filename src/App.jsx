@@ -1,336 +1,352 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { 
-  Trash2, MessageSquare, CheckCircle, BookOpen, Library, Video, 
-  Plus, X, ArrowLeft, Mic, MicOff, Camera, CameraOff, PhoneOff, 
-  UploadCloud, Users, Heart, Send, Flame, Award, Hand, Smile
+  Home, BookOpen, Trophy, Plus, X, UploadCloud, 
+  MessageCircle, Mic, MicOff, Camera, CameraOff, PhoneOff, 
+  Lock, ExternalLink, Image as ImageIcon, Sparkles, User,
+  MoreHorizontal, Heart, Send, Trash2, Edit3, Pin
 } from 'lucide-react';
 
-// --- MOCK DATA (6 Members for the Perfect Grid) ---
-const INITIAL_MEMBERS = [
-  { id: 1, name: "Sarah", status: "Listening", color: "bg-pink-600", handRaised: false },
-  { id: 2, name: "Mike", status: "Speaking...", color: "bg-blue-600", handRaised: true },
-  { id: 3, name: "Jessica", status: "Muted", color: "bg-purple-600", handRaised: false },
-  { id: 4, name: "David", status: "Listening", color: "bg-yellow-600", handRaised: false },
-  { id: 5, name: "Anita", status: "Listening", color: "bg-green-600", handRaised: false },
-];
+// --- CONFIGURATION ---
+const supabaseUrl = 'https://cmbugolomogriwcqcdhk.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtYnVnb2xvbW9ncml3Y3FjZGhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNDcyNzIsImV4cCI6MjA4MzYyMzI3Mn0.flvM9pSa0fbWiW56kcwOwwBKfqSXl10DVqt3Fp6AOD8';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- ROBUST BOOK IMAGES ---
-const SAMPLE_PDF = "https://pdfobject.com/pdf/sample.pdf";
-const INITIAL_LIBRARY = [
-  { id: 1, title: "Atomic Habits", author: "James Clear", cover: "https://images.unsplash.com/photo-1592496431122-2349e0fbc666?w=600&auto=format&fit=crop&q=60", pdfUrl: SAMPLE_PDF },
-  { id: 2, title: "Psychology of Money", author: "Morgan Housel", cover: "https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=600&auto=format&fit=crop&q=60", pdfUrl: SAMPLE_PDF },
-  { id: 3, title: "Rich Dad Poor Dad", author: "R. Kiyosaki", cover: "https://images.unsplash.com/photo-1554774853-719586f8c277?w=600&auto=format&fit=crop&q=60", pdfUrl: SAMPLE_PDF },
-  { id: 4, title: "The Alchemist", author: "Paulo Coelho", cover: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&auto=format&fit=crop&q=60", pdfUrl: SAMPLE_PDF },
-];
-
-const VOTING_OPTIONS = [
-  { id: 1, title: "The Midnight Library", votes: 12, author: "Matt Haig" },
-  { id: 2, title: "Project Hail Mary", votes: 8, author: "Andy Weir" },
-  { id: 3, title: "Dune", votes: 4, author: "Frank Herbert" },
-];
-
-const INITIAL_CHATS = [
-  { id: 1, user: "Sarah", text: "Has anyone finished Chapter 4 yet? It's mind-blowing! 🤯" },
-  { id: 2, user: "Mike", text: "I'm halfway through. No spoilers please!" },
-  { id: 3, user: "Jessica", text: "The symbolism in the second act is beautiful." },
-];
+const ADMIN_PIN = "2026"; 
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState('library'); 
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [activeTab, setActiveTab] = useState('dashboard'); 
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Data States
-  const [libraryBooks, setLibraryBooks] = useState(INITIAL_LIBRARY);
-  const [chatMessages, setChatMessages] = useState(INITIAL_CHATS);
-  const [bookOptions, setBookOptions] = useState(VOTING_OPTIONS);
-  const [newMessage, setNewMessage] = useState("");
+  const [libraryBooks, setLibraryBooks] = useState([]); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false); 
   
-  // Feature States
+  // Chat States (Fable Feature)
+  const [discussionTopic, setDiscussionTopic] = useState("Introduction: What are your first impressions?");
+  
+  // Upload Form States
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [newBookTitle, setNewBookTitle] = useState("");
   const [newBookAuthor, setNewBookAuthor] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null); 
-  const [readingBook, setReadingBook] = useState(null);
+  const [selectedPdf, setSelectedPdf] = useState(null); 
+  const [selectedCover, setSelectedCover] = useState(null);
 
   // Video Call States
   const [isCallActive, setIsCallActive] = useState(false);
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
-  const [myHandRaised, setMyHandRaised] = useState(false);
-  const [reactions, setReactions] = useState([]);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
-  // --- ACTIONS ---
+  // --- 1. FETCH BOOKS ---
+  useEffect(() => {
+    fetchBooks();
+  }, []);
+
+  async function fetchBooks() {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('books')
+      .select('*')
+      .order('id', { ascending: false });
+
+    if (error) console.log('Error fetching books:', error);
+    else setLibraryBooks(data || []);
+    setIsLoading(false);
+  }
+
+  // --- 2. UPLOAD LOGIC ---
+  const handleUploadBook = async (e) => {
+    e.preventDefault();
+    if (!newBookTitle || !selectedPdf) return alert("Please select a PDF file!");
+    
+    setIsUploading(true);
+
+    try {
+      const pdfName = `pdf-${Date.now()}-${selectedPdf.name.replace(/\s/g, '_')}`;
+      const { error: pdfError } = await supabase.storage.from('book-files').upload(pdfName, selectedPdf);
+      if (pdfError) throw pdfError;
+      const { data: { publicUrl: pdfUrl } } = supabase.storage.from('book-files').getPublicUrl(pdfName);
+
+      let coverUrl = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=600&auto=format&fit=crop&q=60";
+      if (selectedCover) {
+        const coverName = `img-${Date.now()}-${selectedCover.name.replace(/\s/g, '_')}`;
+        const { error: coverError } = await supabase.storage.from('book-files').upload(coverName, selectedCover);
+        if (coverError) throw coverError;
+        const { data: { publicUrl: realCoverUrl } } = supabase.storage.from('book-files').getPublicUrl(coverName);
+        coverUrl = realCoverUrl;
+      }
+
+      const { error: dbError } = await supabase
+        .from('books')
+        .insert([{ title: newBookTitle, author: newBookAuthor, cover: coverUrl, pdf_url: pdfUrl }]);
+
+      if (dbError) throw dbError;
+
+      fetchBooks();
+      setShowUploadForm(false); 
+      setNewBookTitle(""); setNewBookAuthor("");
+      setSelectedPdf(null); setSelectedCover(null);
+      alert("Book Uploaded Successfully!");
+
+    } catch (error) {
+      alert("Error: " + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // --- 3. DELETE LOGIC ---
+  const handleDeleteBook = async (id) => {
+    if (!window.confirm("Delete this book?")) return;
+    const { error } = await supabase.from('books').delete().eq('id', id);
+    if (!error) setLibraryBooks(libraryBooks.filter(book => book.id !== id));
+  };
+
+  // --- 4. VIDEO CALL ---
   const startCall = async () => {
     try {
       setIsCallActive(true);
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       streamRef.current = stream;
-      setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = stream; }, 100);
-    } catch (err) { alert("Error accessing camera: " + err); setIsCallActive(false); }
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch (err) { 
+      alert("Could not access camera. Please allow permissions."); 
+      setIsCallActive(false); 
+    }
   };
 
   const endCall = () => {
     setIsCallActive(false);
     if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
-    streamRef.current = null;
   };
 
-  const toggleMic = () => { if (streamRef.current) { streamRef.current.getAudioTracks()[0].enabled = !micOn; setMicOn(!micOn); }};
-  const toggleCamera = () => { if (streamRef.current) { streamRef.current.getVideoTracks()[0].enabled = !cameraOn; setCameraOn(!cameraOn); }};
-
-  const triggerReaction = (emoji) => {
-    const id = Date.now();
-    setReactions([...reactions, { id, emoji, left: Math.random() * 80 + 10 }]);
-    setTimeout(() => {
-      setReactions(prev => prev.filter(r => r.id !== id));
-    }, 2000);
+  // --- 5. TOPIC UPDATE (FABLE FEATURE) ---
+  const handleUpdateTopic = () => {
+    const newTopic = window.prompt("Set new discussion topic:", discussionTopic);
+    if (newTopic) setDiscussionTopic(newTopic);
   };
 
-  const handleUploadBook = (e) => {
-    e.preventDefault();
-    if (!newBookTitle || !newBookAuthor) return;
-    let bookUrl = SAMPLE_PDF;
-    if (selectedFile) bookUrl = URL.createObjectURL(selectedFile);
-    // Colorful placeholder for uploads
-    const randomCover = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=600&auto=format&fit=crop&q=60";
-    setLibraryBooks([{ id: Date.now(), title: newBookTitle, author: newBookAuthor, cover: randomCover, pdfUrl: bookUrl }, ...libraryBooks]); 
-    setShowUploadForm(false); setNewBookTitle(""); setNewBookAuthor(""); setSelectedFile(null);
+  const handleAdminToggle = () => {
+    if (isAdmin) setIsAdmin(false);
+    else {
+      if (window.prompt("Enter Admin PIN:") === ADMIN_PIN) setIsAdmin(true);
+      else alert("Incorrect PIN");
+    }
   };
 
-  const castVote = (id) => {
-    setBookOptions(bookOptions.map(book => book.id === id ? { ...book, votes: book.votes + 1 } : book));
-  };
-
-  const sendMessage = (e) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-    setChatMessages([...chatMessages, { id: Date.now(), user: "You", text: newMessage }]);
-    setNewMessage("");
-  };
-
-  // --- DARK THEME BACKGROUND ---
-  const bgStyle = "min-h-screen bg-slate-950 font-sans pb-24 text-white";
+  const bgStyle = "min-h-screen bg-black font-sans pb-28 text-white";
 
   return (
     <div className={bgStyle}>
-      
-      {/* HEADER */}
       {!isCallActive && (
-        <nav className="backdrop-blur-md bg-white/5 border-b border-white/10 p-4 sticky top-0 z-20 flex justify-between items-center">
-          <h1 className="text-xl font-bold flex items-center gap-2 text-white shadow-sm">
-            <BookOpen size={20} className="text-indigo-400"/> Mindful Readers
-          </h1>
-          <button onClick={() => setIsAdmin(!isAdmin)} className={`text-[10px] px-3 py-1 rounded-full border transition font-bold uppercase tracking-wider ${isAdmin ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-transparent border-white/30 text-white/70'}`}>
-            {isAdmin ? "Admin Mode" : "Member Mode"}
+        <nav className="fixed top-0 left-0 right-0 z-30 bg-black/50 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="bg-indigo-600 p-1.5 rounded-lg"><BookOpen size={16} fill="white" /></div>
+            <h1 className="text-lg font-bold tracking-tight">Mindful<span className="text-indigo-400">Readers</span></h1>
+          </div>
+          <button onClick={handleAdminToggle} className={`text-[10px] px-3 py-1.5 rounded-full border font-bold uppercase tracking-wider flex items-center gap-1 transition-all ${isAdmin ? 'bg-indigo-600 border-indigo-500 shadow-glow' : 'border-white/20 text-white/50'}`}>
+            <Lock size={10} /> {isAdmin ? "Admin" : "Member"}
           </button>
         </nav>
       )}
 
-      <main className={`p-4 max-w-lg mx-auto relative ${isCallActive ? 'p-0 max-w-full h-screen overflow-hidden' : ''}`}>
+      <main className={`pt-20 px-4 max-w-lg mx-auto relative ${isCallActive ? 'p-0 max-w-full h-screen overflow-hidden' : ''}`}>
 
-        {/* --- 6-PERSON VIDEO GRID (3 COLUMNS = SQUARES) --- */}
+        {/* --- FIXED VIDEO CALL UI --- */}
         {isCallActive && (
-           <div className="fixed inset-0 bg-gray-950 z-50 flex flex-col">
-             
+           <div className="fixed inset-0 bg-black z-50 flex flex-col">
              {/* HEADER */}
-             <div className="absolute top-0 left-0 right-0 p-4 z-10 flex justify-between items-center bg-gradient-to-b from-black/90 to-transparent">
-                <div className="text-white font-bold flex items-center gap-2">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> 
-                  Live Session
+             <div className="absolute top-0 left-0 right-0 p-6 z-10 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
+                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> 
+                    <span className="text-xs font-bold">Live</span>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setMyHandRaised(!myHandRaised)} className={`p-2 rounded-full transition ${myHandRaised ? 'bg-yellow-500 text-black' : 'bg-white/10 text-white'}`}><Hand size={18}/></button>
-                  <button onClick={() => triggerReaction("❤️")} className="p-2 rounded-full bg-white/10 text-red-400 hover:bg-white/20"><Heart size={18}/></button>
-                  <button onClick={() => triggerReaction("👍")} className="p-2 rounded-full bg-white/10 text-yellow-400 hover:bg-white/20"><Smile size={18}/></button>
-                </div>
-             </div>
-
-             {/* THE 3-COLUMN GRID (Fixes Aspect Ratio) */}
-             <div className="flex-1 grid grid-cols-3 gap-1 p-1 pt-16 pb-24 content-start overflow-y-auto">
-               
-               {/* 1. YOU (Real Camera) */}
-               <div className="bg-gray-900 relative aspect-square rounded-xl overflow-hidden border border-white/10">
-                 <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
-                 <div className="absolute bottom-1 left-1 text-white text-[10px] font-bold bg-black/60 px-2 py-0.5 rounded backdrop-blur-md">You</div>
-                 {!cameraOn && <div className="absolute inset-0 flex items-center justify-center bg-gray-800"><CameraOff size={24} className="text-white/50"/></div>}
-                 {myHandRaised && <div className="absolute top-2 right-2 bg-yellow-500 text-black p-1 rounded-full"><Hand size={14}/></div>}
-                 
-                 {/* Floating Reactions */}
-                 {reactions.map(r => (
-                   <div key={r.id} className="absolute bottom-0 text-2xl animate-[float_2s_ease-out_forwards]" style={{ left: `${r.left}%` }}>{r.emoji}</div>
-                 ))}
-               </div>
-
-               {/* 2. THE MEMBERS (Fake Grid) */}
-               {INITIAL_MEMBERS.map(member => (
-                 <div key={member.id} className="bg-gray-900 relative aspect-square rounded-xl overflow-hidden border border-white/10 flex flex-col items-center justify-center group">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${member.color} mb-1 shadow-xl group-hover:scale-110 transition`}>
-                      {member.name.charAt(0)}
-                    </div>
-                    {member.status === "Speaking..." && (
-                      <div className="flex gap-0.5 h-3 items-end absolute bottom-6">
-                        <div className="w-1 bg-green-400 animate-bounce h-2"></div>
-                        <div className="w-1 bg-green-400 animate-bounce h-3 delay-75"></div>
-                        <div className="w-1 bg-green-400 animate-bounce h-1 delay-150"></div>
-                      </div>
-                    )}
-                    {member.handRaised && <div className="absolute top-2 right-2 bg-yellow-500 text-black p-1 rounded-full"><Hand size={14}/></div>}
-                    <div className="absolute bottom-1 left-1 text-white text-[10px] font-bold bg-black/60 px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
-                       {member.status === "Muted" && <MicOff size={8} className="text-red-400"/>}
-                       {member.name}
-                    </div>
-                 </div>
-               ))}
              </div>
              
-             {/* CONTROLS */}
-             <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-6 z-20">
-               <button onClick={toggleMic} className={`p-4 rounded-full transition shadow-xl backdrop-blur-xl border border-white/10 ${micOn ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-red-500 text-white'}`}>{micOn ? <Mic size={24}/> : <MicOff size={24}/>}</button>
-               <button onClick={endCall} className="bg-red-600 text-white p-6 rounded-full shadow-2xl hover:bg-red-700 transition hover:scale-110 active:scale-95 border-4 border-gray-950"><PhoneOff size={32} fill="white" /></button>
-               <button onClick={toggleCamera} className={`p-4 rounded-full transition shadow-xl backdrop-blur-xl border border-white/10 ${cameraOn ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-red-500 text-white'}`}>{cameraOn ? <Camera size={24}/> : <CameraOff size={24}/>}</button>
+             {/* VIDEO */}
+             <div className="flex-1 relative">
+                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="text-center bg-black/40 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+                        <User size={32} className="text-white/50 mx-auto mb-2"/>
+                        <p className="text-white/80 font-bold">You are the Host</p>
+                        <p className="text-white/40 text-xs">Waiting for others...</p>
+                    </div>
+                </div>
+             </div>
+
+             {/* CONTROLS - FIXED HIGH FROM BOTTOM */}
+             <div className="absolute bottom-12 left-0 right-0 flex justify-center gap-8 z-50 px-8">
+               <button onClick={() => setMicOn(!micOn)} className={`p-5 rounded-full shadow-2xl transition-all ${micOn ? 'bg-gray-800/80 backdrop-blur-md text-white' : 'bg-white text-black'}`}>{micOn ? <Mic size={24}/> : <MicOff size={24}/>}</button>
+               
+               {/* END BUTTON - BIG RED ONE */}
+               <button onClick={endCall} className="bg-red-500 p-6 rounded-2xl hover:scale-105 transition shadow-red-900/40 shadow-xl border-4 border-black"><PhoneOff size={32} fill="white" /></button>
+               
+               <button onClick={() => setCameraOn(!cameraOn)} className={`p-5 rounded-full shadow-2xl transition-all ${cameraOn ? 'bg-gray-800/80 backdrop-blur-md text-white' : 'bg-white text-black'}`}>{cameraOn ? <Camera size={24}/> : <CameraOff size={24}/>}</button>
              </div>
            </div>
         )}
 
         {/* --- LIBRARY --- */}
         {!isCallActive && activeTab === 'library' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center px-2">
-               <div><h2 className="text-2xl font-bold text-white">My Bookshelf</h2><p className="text-white/50 text-xs">Explore your mind</p></div>
-               {isAdmin && <button onClick={() => setShowUploadForm(true)} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full font-bold flex items-center gap-1 shadow-lg shadow-indigo-900/50 transition"><Plus size={16}/> Add Book</button>}
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="flex justify-between items-end px-1">
+               <div><h2 className="text-3xl font-bold text-white tracking-tight">Library</h2><p className="text-white/40 text-sm mt-1">Explore {libraryBooks.length} titles</p></div>
+               {isAdmin && <button onClick={() => setShowUploadForm(true)} className="bg-white text-black px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:scale-105 transition shadow-lg shadow-white/10"><Plus size={16}/> Add</button>}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              {libraryBooks.map(book => (
-                <div key={book.id} className="group relative bg-white/5 backdrop-blur-sm p-3 rounded-2xl border border-white/10 hover:bg-white/10 transition-all hover:-translate-y-1">
-                  <div className="w-full aspect-[2/3] rounded-lg mb-3 overflow-hidden shadow-lg relative bg-gray-800">
-                    <img src={book.cover} alt={book.title} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition" />
-                    <button onClick={() => { setReadingBook(book); setActiveTab('reader'); }} className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black/60 backdrop-blur-sm">
-                      <span className="bg-white text-black px-4 py-2 rounded-full text-xs font-bold shadow-xl">Read Now</span>
-                    </button>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-6">
+               {libraryBooks.map(book => (
+                  <div key={book.id} className="group relative">
+                    <div className="aspect-[2/3] bg-gray-900 rounded-xl mb-3 relative overflow-hidden shadow-2xl border border-white/5 group-hover:border-white/20 transition-all">
+                      <img src={book.cover} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition duration-500" alt="cover"/>
+                      <a href={book.pdf_url} target="_blank" rel="noreferrer" className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition duration-300">
+                        <span className="bg-white text-black px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition duration-300"><BookOpen size={14}/> Read</span>
+                      </a>
+                      {isAdmin && (
+                        <button onClick={(e) => { e.preventDefault(); handleDeleteBook(book.id); }} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition hover:scale-110 shadow-lg z-20"><Trash2 size={14}/></button>
+                      )}
+                    </div>
+                    <h3 className="font-bold text-base leading-tight">{book.title}</h3>
+                    <p className="text-xs text-gray-400 mt-1">{book.author}</p>
                   </div>
-                  <h3 className="font-bold text-sm text-white leading-tight line-clamp-1">{book.title}</h3>
-                  <p className="text-xs text-white/50 mt-1">{book.author}</p>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
         )}
 
-        {/* --- VOTING UI --- */}
+        {/* --- VOTE TAB --- */}
         {!isCallActive && activeTab === 'vote' && (
-          <div className="space-y-6 animate-in slide-in-from-right duration-300">
-             <div className="px-2"><h2 className="text-2xl font-bold text-white">Next Month's Read</h2><p className="text-white/50 text-xs">Cast your vote below</p></div>
-             <div className="space-y-3">
-               {bookOptions.map(book => (
-                 <div key={book.id} className="bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10 flex justify-between items-center">
-                   <div><h3 className="font-bold text-white">{book.title}</h3><p className="text-xs text-white/50">by {book.author}</p></div>
-                   <button onClick={() => castVote(book.id)} className="group flex items-center gap-2 bg-white/10 hover:bg-indigo-600 transition px-4 py-2 rounded-xl text-sm font-bold border border-white/5">
-                     <Heart size={16} className={`text-indigo-400 group-hover:text-white group-hover:fill-current`} />{book.votes}
-                   </button>
-                 </div>
-               ))}
-             </div>
-          </div>
+            <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                <h2 className="text-3xl font-bold px-1">Vote Next</h2>
+                <div className="bg-gradient-to-br from-gray-900 to-black p-6 rounded-[2rem] border border-white/10 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 blur-3xl rounded-full"></div>
+                    <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-6">
+                            <div><h3 className="font-bold text-xl">The Psychology of Money</h3><p className="text-indigo-400 text-sm">Morgan Housel</p></div>
+                            <Trophy className="text-yellow-400" size={24}/>
+                        </div>
+                        <div className="w-full bg-gray-800 h-3 rounded-full mb-3 overflow-hidden"><div className="bg-indigo-500 h-full w-[75%] rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div></div>
+                        <div className="flex justify-between text-xs text-gray-400 mb-6"><span>15 Votes</span><span>75%</span></div>
+                        <button className="w-full py-4 rounded-xl bg-white text-black font-bold text-sm hover:scale-[1.02] transition shadow-lg">Vote for this Book</button>
+                    </div>
+                </div>
+            </div>
         )}
 
-        {/* --- CHAT UI --- */}
+        {/* --- CHAT TAB (FABLE FEATURE: TOPIC) --- */}
         {!isCallActive && activeTab === 'chat' && (
-          <div className="flex flex-col h-[75vh] animate-in slide-in-from-right duration-300">
-             <div className="px-2 mb-4"><h2 className="text-2xl font-bold text-white">Community Chat</h2><p className="text-white/50 text-xs">Live discussions</p></div>
-             <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
-               {chatMessages.map(msg => (
-                 <div key={msg.id} className={`p-4 rounded-2xl max-w-[85%] text-sm leading-relaxed ${msg.user === 'You' ? 'ml-auto bg-indigo-600 text-white rounded-tr-none' : 'bg-white/10 backdrop-blur-md border border-white/5 text-gray-100 rounded-tl-none'}`}>
-                   <p className={`text-[10px] font-bold mb-1 opacity-70 uppercase tracking-wide`}>{msg.user}</p><p>{msg.text}</p>
-                 </div>
-               ))}
-             </div>
-             <form onSubmit={sendMessage} className="flex gap-2 bg-white/10 p-2 rounded-2xl border border-white/10 backdrop-blur-lg">
-               <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Share your thoughts..." className="flex-1 bg-transparent text-white px-3 focus:outline-none placeholder:text-white/30"/>
-               <button type="submit" className="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-500 transition"><Send size={18}/></button>
-             </form>
-          </div>
-        )}
+            <div className="flex flex-col h-[75vh] animate-in slide-in-from-right duration-300">
+                <h2 className="text-3xl font-bold px-1 mb-4">Discussion</h2>
+                
+                {/* THE PINNED TOPIC (FABLE STEAL) */}
+                <div className="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-2xl mb-4 relative">
+                   <div className="flex items-center gap-2 mb-1">
+                      <Pin size={12} className="text-indigo-400"/>
+                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Current Topic</span>
+                   </div>
+                   <p className="text-sm font-medium text-indigo-100 pr-6">"{discussionTopic}"</p>
+                   {isAdmin && (
+                     <button onClick={handleUpdateTopic} className="absolute top-4 right-4 text-indigo-400 hover:text-white"><Edit3 size={14}/></button>
+                   )}
+                </div>
 
-        {/* --- READER MODE --- */}
-        {!isCallActive && activeTab === 'reader' && readingBook && (
-          <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col animate-in fade-in slide-in-from-bottom-10 duration-300">
-            <div className="bg-gray-800 text-white p-4 shadow-md flex items-center gap-4 border-b border-white/10">
-               <button onClick={() => setActiveTab('library')} className="hover:bg-white/10 p-2 rounded-full"><ArrowLeft size={24}/></button>
-               <div><h2 className="font-bold text-sm leading-tight">Reading: {readingBook.title}</h2></div>
+                <div className="flex-1 space-y-4 overflow-y-auto mb-4 scrollbar-hide">
+                    <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold">S</div>
+                        <div className="bg-gray-900 p-4 rounded-2xl rounded-tl-none border border-white/10"><p className="text-xs text-indigo-400 font-bold mb-1">Sarah</p><p className="text-sm text-gray-200">Chapter 3 was insane! 🤯</p></div>
+                    </div>
+                </div>
+                <div className="flex gap-2 bg-gray-900 p-2 rounded-2xl border border-white/10 pl-4">
+                    <input type="text" placeholder="Share your thoughts..." className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-gray-600" />
+                    <button className="bg-indigo-600 p-3 rounded-xl hover:bg-indigo-500 transition"><Send size={18}/></button>
+                </div>
             </div>
-            <div className="flex-1 bg-gray-900 p-2">
-               <iframe src={readingBook.pdfUrl} className="w-full h-full rounded-lg border border-white/10 bg-white" title="PDF Viewer"></iframe>
-            </div>
-          </div>
         )}
 
         {/* --- DASHBOARD --- */}
         {!isCallActive && activeTab === 'dashboard' && (
-           <div className="space-y-6">
-             <div className="bg-gradient-to-r from-indigo-700 to-purple-700 rounded-3xl p-8 shadow-2xl relative overflow-hidden border border-white/10">
-               <div className="absolute top-0 right-0 p-8 opacity-10 transform translate-x-10 -translate-y-10"><BookOpen size={140} /></div>
-               <div className="flex gap-2 mb-4">
-                 <span className="bg-orange-500/20 text-orange-300 border border-orange-500/30 px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-1"><Flame size={12}/> 12 Day Streak</span>
-                 <span className="bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-1"><Award size={12}/> Top Reader</span>
+           <div className="space-y-6 animate-in zoom-in duration-300">
+             <div className="h-[40vh] bg-gradient-to-br from-indigo-600 to-purple-800 rounded-[2.5rem] p-8 relative overflow-hidden flex flex-col justify-end shadow-2xl">
+               <img src="https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=1000" className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay" />
+               <div className="relative z-10">
+                   <div className="inline-flex items-center gap-2 bg-black/30 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full text-xs font-bold mb-4 text-white/90"><Sparkles size={12} className="text-yellow-400"/> Daily Streak: 12</div>
+                   <h2 className="text-4xl font-bold text-white mb-2 leading-tight">Keep up the<br/>momentum.</h2>
+                   <button onClick={() => setActiveTab('library')} className="mt-4 bg-white text-black px-6 py-3 rounded-full font-bold text-sm hover:scale-105 transition shadow-xl">Continue Reading</button>
                </div>
-               <h2 className="text-3xl font-extrabold text-white mt-2 relative z-10">Welcome Back</h2>
-               <p className="text-indigo-200 relative z-10 mb-6 text-sm">Ready to dive back in?</p>
-               <button onClick={() => setActiveTab('library')} className="bg-white text-indigo-900 px-6 py-3 rounded-full font-bold text-sm shadow-xl hover:bg-gray-100 transition relative z-10">Resume Reading</button>
              </div>
-             
              <div className="grid grid-cols-2 gap-4">
-               <button onClick={() => setActiveTab('vote')} className="bg-white/5 p-6 rounded-2xl border border-white/10 hover:bg-white/10 transition flex flex-col items-center gap-3 group">
-                 <div className="bg-pink-500/20 p-3 rounded-full text-pink-400 group-hover:scale-110 transition"><Heart size={24}/></div><span className="font-bold text-gray-200 text-sm">Vote Next</span>
+               <button onClick={() => setActiveTab('vote')} className="bg-gray-900 p-6 rounded-3xl border border-white/5 hover:border-indigo-500/50 transition group">
+                 <div className="w-12 h-12 bg-gray-800 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-indigo-500 group-hover:text-white transition-colors"><Trophy size={24}/></div>
+                 <span className="font-bold text-gray-200">Vote Next</span>
                </button>
-               <button onClick={() => setActiveTab('live')} className="bg-white/5 p-6 rounded-2xl border border-white/10 hover:bg-white/10 transition flex flex-col items-center gap-3 group">
-                 <div className="bg-green-500/20 p-3 rounded-full text-green-400 group-hover:scale-110 transition"><Video size={24}/></div><span className="font-bold text-gray-200 text-sm">Join Meet</span>
+               <button onClick={startCall} className="bg-gray-900 p-6 rounded-3xl border border-white/5 hover:border-green-500/50 transition group">
+                 <div className="w-12 h-12 bg-gray-800 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-green-500 group-hover:text-white transition-colors"><Camera size={24}/></div>
+                 <span className="font-bold text-gray-200">Join Live</span>
                </button>
              </div>
           </div>
         )}
 
-        {!isCallActive && activeTab === 'live' && (
-          <div className="text-center space-y-6 mt-10">
-             <div className="bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl">
-               <div className="bg-green-500/20 w-20 h-20 mx-auto rounded-full flex items-center justify-center text-green-400 mb-4 animate-pulse">
-                 <Video size={40}/>
-               </div>
-               <h2 className="text-2xl font-bold text-white">Live Session</h2>
-               <p className="text-white/50 text-sm mt-2">5 Members are online.</p>
-               <button onClick={startCall} className="mt-8 w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-4 rounded-2xl shadow-lg hover:scale-[1.02] transition">JOIN SESSION</button>
-             </div>
+        {/* --- UPLOAD MODAL --- */}
+        {showUploadForm && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-gray-900 border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-sm p-8 relative animate-in slide-in-from-bottom duration-300">
+              <div className="w-12 h-1 bg-gray-700 rounded-full mx-auto mb-6 sm:hidden"></div>
+              <h3 className="text-2xl font-bold mb-6">New Upload</h3>
+              <form onSubmit={handleUploadBook} className="space-y-4">
+                <div className="space-y-4">
+                    <input type="text" value={newBookTitle} onChange={e => setNewBookTitle(e.target.value)} className="w-full p-4 bg-black rounded-2xl border border-white/10 text-white focus:border-indigo-500 transition outline-none font-medium" placeholder="Book Title" />
+                    <input type="text" value={newBookAuthor} onChange={e => setNewBookAuthor(e.target.value)} className="w-full p-4 bg-black rounded-2xl border border-white/10 text-white focus:border-indigo-500 transition outline-none font-medium" placeholder="Author" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="relative group">
+                        <input type="file" accept="application/pdf" onChange={e => setSelectedPdf(e.target.files[0])} className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" />
+                        <div className={`h-24 bg-black rounded-2xl border border-dashed ${selectedPdf ? 'border-green-500 bg-green-900/10' : 'border-white/20'} flex flex-col items-center justify-center gap-2 transition`}>
+                            <UploadCloud size={20} className={selectedPdf ? 'text-green-500' : 'text-gray-500'}/>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase">{selectedPdf ? 'PDF Added' : 'PDF'}</span>
+                        </div>
+                    </div>
+                    <div className="relative group">
+                        <input type="file" accept="image/*" onChange={e => setSelectedCover(e.target.files[0])} className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" />
+                        <div className={`h-24 bg-black rounded-2xl border border-dashed ${selectedCover ? 'border-green-500 bg-green-900/10' : 'border-white/20'} flex flex-col items-center justify-center gap-2 transition`}>
+                            <ImageIcon size={20} className={selectedCover ? 'text-green-500' : 'text-gray-500'}/>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase">{selectedCover ? 'Img Added' : 'Cover'}</span>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" disabled={isUploading} className="w-full bg-white text-black font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-95 transition shadow-lg shadow-white/10 disabled:opacity-50 mt-4">
+                  {isUploading ? "Uploading..." : "Publish to Library"}
+                </button>
+                <button type="button" onClick={() => setShowUploadForm(false)} className="w-full text-center text-gray-500 text-sm font-medium py-2">Cancel</button>
+              </form>
+            </div>
           </div>
         )}
 
+        {/* --- BOTTOM NAV --- */}
+        {!isCallActive && (
+          <div className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-white/10 flex justify-around p-2 pb-8 z-30">
+            {[
+              { id: 'dashboard', icon: Home, label: 'Home' },
+              { id: 'library', icon: BookOpen, label: 'Library' },
+              { id: 'vote', icon: Trophy, label: 'Vote' },
+              { id: 'chat', icon: MessageCircle, label: 'Chat' },
+            ].map((tab) => (
+              <button 
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)} 
+                className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 w-20 ${activeTab === tab.id ? 'bg-white/10 text-white scale-105' : 'text-gray-500 hover:text-gray-300'}`}
+              >
+                <tab.icon size={20} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
+                <span className="text-[10px] font-bold">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </main>
-      
-      {/* --- UPLOAD MODAL --- */}
-      {showUploadForm && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-bounce-in text-white">
-            <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-bold">Upload New Book</h3><button onClick={() => setShowUploadForm(false)} className="text-gray-400 hover:text-white"><X size={24}/></button></div>
-            <form onSubmit={handleUploadBook} className="space-y-4">
-              <div><label className="block text-xs font-bold text-gray-500 mb-1">BOOK TITLE</label><input type="text" value={newBookTitle} onChange={(e) => setNewBookTitle(e.target.value)} className="w-full p-3 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 outline-none text-white" placeholder="Book Name" /></div>
-              <div><label className="block text-xs font-bold text-gray-500 mb-1">AUTHOR</label><input type="text" value={newBookAuthor} onChange={(e) => setNewBookAuthor(e.target.value)} className="w-full p-3 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 outline-none text-white" placeholder="Author Name" /></div>
-              <div><label className="block text-xs font-bold text-gray-500 mb-1">PDF FILE</label><div className="relative"><input type="file" accept="application/pdf" onChange={(e) => { if(e.target.files) setSelectedFile(e.target.files[0]) }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /><div className="w-full p-3 bg-white/5 rounded-xl border-2 border-dashed border-white/20 text-white/60 font-bold text-center flex items-center justify-center gap-2"><UploadCloud size={20}/>{selectedFile ? selectedFile.name : "Tap to Select PDF"}</div></div></div>
-              <div className="pt-2"><button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-500 transition">Add to Library</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* BOTTOM NAV */}
-      {!isCallActive && (
-        <div className="fixed bottom-0 left-0 right-0 bg-gray-900/80 backdrop-blur-lg border-t border-white/10 flex justify-around p-3 pb-6 z-20">
-          <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 text-[10px] ${activeTab === 'dashboard' ? 'text-indigo-400 font-bold' : 'text-gray-400'}`}><BookOpen size={24} /> Home</button>
-          <button onClick={() => setActiveTab('library')} className={`flex flex-col items-center gap-1 text-[10px] ${activeTab === 'library' ? 'text-indigo-400 font-bold' : 'text-gray-400'}`}><Library size={24} /> Library</button>
-          <button onClick={() => setActiveTab('vote')} className={`flex flex-col items-center gap-1 text-[10px] ${activeTab === 'vote' ? 'text-indigo-400 font-bold' : 'text-gray-400'}`}><Heart size={24} /> Vote</button>
-          <button onClick={() => setActiveTab('chat')} className={`flex flex-col items-center gap-1 text-[10px] ${activeTab === 'chat' ? 'text-indigo-400 font-bold' : 'text-gray-400'}`}><MessageSquare size={24} /> Chat</button>
-          <button onClick={() => setActiveTab('live')} className={`flex flex-col items-center gap-1 text-[10px] ${activeTab === 'live' ? 'text-indigo-400 font-bold' : 'text-gray-400'}`}><Video size={24} /> Meet</button>
-        </div>
-      )}
     </div>
   );
 };
