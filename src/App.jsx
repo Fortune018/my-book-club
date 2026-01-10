@@ -17,7 +17,7 @@ const ADMIN_PIN = "2026";
 const App = () => {
   // --- AUTH STATES ---
   const [session, setSession] = useState(null);
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
+  const [authMode, setAuthMode] = useState('login'); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -34,8 +34,6 @@ const App = () => {
   // Forms & Loading
   const [isUploading, setIsUploading] = useState(false); 
   const [showUploadForm, setShowUploadForm] = useState(false);
-  
-  // Upload Inputs
   const [newBookTitle, setNewBookTitle] = useState("");
   const [newBookAuthor, setNewBookAuthor] = useState("");
   const [selectedPdf, setSelectedPdf] = useState(null); 
@@ -50,13 +48,11 @@ const App = () => {
 
   // --- 1. INITIALIZATION ---
   useEffect(() => {
-    // Check if user is already logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) fetchProfile(session.user.id);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) fetchProfile(session.user.id);
@@ -65,12 +61,10 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch Data when Session Exists
   useEffect(() => {
     if (session) {
       fetchBooks();
       fetchMessages();
-      // Realtime subscription for chat
       const channel = supabase
         .channel('public:messages')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, 
@@ -85,18 +79,10 @@ const App = () => {
     e.preventDefault();
     setIsUploading(true);
     let error;
-    
     if (authMode === 'signup') {
       const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
       if (!signUpError && data.user) {
-        // Create Profile
-        await supabase.from('profiles').insert([{ 
-          id: data.user.id, 
-          email: email, 
-          username: username,
-          streak_count: 1, // Start streak!
-          last_seen: new Date()
-        }]);
+        await supabase.from('profiles').insert([{ id: data.user.id, email: email, username: username, streak_count: 1, last_seen: new Date() }]);
         alert("Account created! You can now log in.");
         setAuthMode('login');
       }
@@ -105,7 +91,6 @@ const App = () => {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       error = signInError;
     }
-
     if (error) alert(error.message);
     setIsUploading(false);
   };
@@ -119,23 +104,18 @@ const App = () => {
   const fetchProfile = async (userId) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
     setProfile(data);
-    // Simple Streak Logic: If last_seen wasn't today, update it (In real app, we check dates)
-    if (data) {
-        await supabase.from('profiles').update({ last_seen: new Date() }).eq('id', userId);
-    }
+    if (data) await supabase.from('profiles').update({ last_seen: new Date() }).eq('id', userId);
   };
 
   const handleUpdateAvatar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setIsUploading(true);
-    
     const fileName = `avatar-${Date.now()}`;
     await supabase.storage.from('book-files').upload(fileName, file);
     const { data: { publicUrl } } = supabase.storage.from('book-files').getPublicUrl(fileName);
-    
     await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', session.user.id);
-    fetchProfile(session.user.id); // Refresh
+    fetchProfile(session.user.id);
     setIsUploading(false);
   };
 
@@ -153,107 +133,62 @@ const App = () => {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !profile) return;
-    
-    await supabase.from('messages').insert([{
-        content: newMessage,
-        user_id: session.user.id,
-        username: profile.username || "Member",
-        avatar_url: profile.avatar_url
-    }]);
+    await supabase.from('messages').insert([{ content: newMessage, user_id: session.user.id, username: profile.username || "Member", avatar_url: profile.avatar_url }]);
     setNewMessage("");
   };
 
-  const handleVote = async (bookId, currentVotes) => {
-    // Optimistic Update (Update UI instantly)
-    const updatedBooks = libraryBooks.map(b => b.id === bookId ? {...b, votes: (b.votes || 0) + 1} : b);
+  // --- 4. SMART VOTE LOGIC (THE FIX) ---
+  const handleVote = async (book) => {
+    const userId = session.user.id;
+    let currentVoters = book.voted_by || []; // Get the list of people who voted
+    let newVoters;
+
+    if (currentVoters.includes(userId)) {
+        // If I already voted, REMOVE me (Unvote)
+        newVoters = currentVoters.filter(id => id !== userId);
+    } else {
+        // If I haven't voted, ADD me (Vote)
+        newVoters = [...currentVoters, userId];
+    }
+
+    // Optimistic Update (Update screen instantly)
+    const updatedBooks = libraryBooks.map(b => b.id === book.id ? {...b, voted_by: newVoters} : b);
     setLibraryBooks(updatedBooks);
     
     // DB Update
-    await supabase.from('books').update({ votes: (currentVotes || 0) + 1 }).eq('id', bookId);
+    await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- 4. UPLOAD LOGIC ---
+  // --- 5. UPLOAD & DELETE ---
+  const closeAndResetForm = () => {
+    setShowUploadForm(false); setNewBookTitle(""); setNewBookAuthor(""); setSelectedPdf(null); setSelectedCover(null); setIsUploading(false);
+  };
+
   const handleUploadBook = async (e) => {
     e.preventDefault();
     if (!newBookTitle || !selectedPdf) return alert("Select a PDF!");
+    if (selectedPdf.size > 10 * 1024 * 1024) return alert("PDF too big (Max 10MB)");
+    
     setIsUploading(true);
-
     try {
-      const pdfName = `pdf-${Date.now()}`;
+      const pdfName = `pdf-${Date.now()}-${selectedPdf.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       await supabase.storage.from('book-files').upload(pdfName, selectedPdf);
       const { data: { publicUrl: pdfUrl } } = supabase.storage.from('book-files').getPublicUrl(pdfName);
 
       let coverUrl = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=600&auto=format&fit=crop&q=60";
       if (selectedCover) {
-        const coverName = `img-${Date.now()}`;
+        const coverName = `img-${Date.now()}-${selectedCover.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         await supabase.storage.from('book-files').upload(coverName, selectedCover);
         const { data: { publicUrl } } = supabase.storage.from('book-files').getPublicUrl(coverName);
         coverUrl = publicUrl;
       }
 
-      await supabase.from('books').insert([{ title: newBookTitle, author: newBookAuthor, cover: coverUrl, pdf_url: pdfUrl, votes: 0 }]);
+      // Initialize with empty array for votes
+      await supabase.from('books').insert([{ title: newBookTitle, author: newBookAuthor, cover: coverUrl, pdf_url: pdfUrl, voted_by: [] }]);
       fetchBooks();
-      setShowUploadForm(false);
-    } catch (err) { alert(err.message); } 
-    finally { setIsUploading(false); }
-  };
-
-  // --- 5. RENDER LOGIN SCREEN ---
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">
-           <div className="flex justify-center mb-6"><div className="bg-indigo-600 p-3 rounded-2xl"><BookOpen size={32} /></div></div>
-           <h1 className="text-3xl font-bold text-center mb-2">Mindful<span className="text-indigo-500">Readers</span></h1>
-           <p className="text-center text-gray-400 mb-8">Exclusive Book Club Access</p>
-           
-           <form onSubmit={handleAuth} className="space-y-4">
-              {authMode === 'signup' && (
-                <input type="text" placeholder="Choose a Username" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-4 bg-gray-900 rounded-xl border border-white/10" required />
-              )}
-              <input type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-gray-900 rounded-xl border border-white/10" required />
-              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-gray-900 rounded-xl border border-white/10" required />
-              
-              <button disabled={isUploading} className="w-full bg-indigo-600 font-bold py-4 rounded-xl hover:scale-[1.02] transition">
-                {isUploading ? "Processing..." : (authMode === 'login' ? "Enter Club" : "Join Club")}
-              </button>
-           </form>
-           
-           <div className="mt-6 text-center text-sm">
-             {authMode === 'login' ? "New member? " : "Already have an account? "}
-             <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-indigo-400 font-bold">
-               {authMode === 'login' ? "Sign Up" : "Log In"}
-             </button>
-           </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- 6. RENDER APP (If Logged In) ---
-  const handleAdminToggle = () => {
-    if (isAdmin) setIsAdmin(false);
-    else if (window.prompt("Enter Admin PIN:") === ADMIN_PIN) setIsAdmin(true);
-  };
-
-  // --- 7. VIDEO CALL ---
-  const startCall = async () => {
-    try {
-      setIsCallActive(true);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch (err) { alert("Could not access camera. Check permissions."); setIsCallActive(false); }
-  };
-
-  const endCall = () => {
-    setIsCallActive(false);
-    if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
-  };
-
-  const handleUpdateTopic = () => {
-    const newTopic = window.prompt("Set new discussion topic:", discussionTopic);
-    if (newTopic) setDiscussionTopic(newTopic);
+      closeAndResetForm();
+      alert("Book Uploaded!");
+    } catch (err) { alert(err.message); setIsUploading(false); }
   };
 
   const handleDeleteBook = async (id) => {
@@ -262,23 +197,49 @@ const App = () => {
     if (!error) setLibraryBooks(libraryBooks.filter(book => book.id !== id));
   };
 
+  // --- 6. VIDEO & ADMIN ---
+  const handleAdminToggle = () => {
+    if (isAdmin) setIsAdmin(false);
+    else if (window.prompt("Enter Admin PIN:") === ADMIN_PIN) setIsAdmin(true);
+  };
+  const startCall = async () => {
+    try { setIsCallActive(true); const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); streamRef.current = stream; if (videoRef.current) videoRef.current.srcObject = stream; } catch (err) { alert("Camera Error"); setIsCallActive(false); }
+  };
+  const endCall = () => { setIsCallActive(false); if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop()); };
+  const handleUpdateTopic = () => { const newTopic = window.prompt("Set new discussion topic:", discussionTopic); if (newTopic) setDiscussionTopic(newTopic); };
+
+  // --- RENDER LOGIN ---
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
+        <div className="w-full max-w-sm">
+           <div className="flex justify-center mb-6"><div className="bg-indigo-600 p-3 rounded-2xl"><BookOpen size={32} /></div></div>
+           <h1 className="text-3xl font-bold text-center mb-2">Mindful<span className="text-indigo-500">Readers</span></h1>
+           <p className="text-center text-gray-400 mb-8">Exclusive Book Club Access</p>
+           <form onSubmit={handleAuth} className="space-y-4">
+              {authMode === 'signup' && <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-4 bg-gray-900 rounded-xl border border-white/10" required />}
+              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-gray-900 rounded-xl border border-white/10" required />
+              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-gray-900 rounded-xl border border-white/10" required />
+              <button disabled={isUploading} className="w-full bg-indigo-600 font-bold py-4 rounded-xl hover:scale-[1.02] transition">{isUploading ? "Processing..." : (authMode === 'login' ? "Enter Club" : "Join Club")}</button>
+           </form>
+           <div className="mt-6 text-center text-sm">{authMode === 'login' ? "New member? " : "Have an account? "}<button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-indigo-400 font-bold">{authMode === 'login' ? "Sign Up" : "Log In"}</button></div>
+        </div>
+      </div>
+    );
+  }
+
+  const bgStyle = "min-h-screen bg-black font-sans pb-28 text-white";
 
   return (
-    <div className="min-h-screen bg-black font-sans pb-28 text-white">
+    <div className={bgStyle}>
       {!isCallActive && (
         <nav className="fixed top-0 left-0 right-0 z-30 bg-black/50 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            {profile?.avatar_url ? (
-                <img src={profile.avatar_url} className="w-8 h-8 rounded-full object-cover border border-indigo-500" />
-            ) : (
-                <div className="bg-indigo-600 p-1.5 rounded-lg"><User size={16} fill="white" /></div>
-            )}
+            {profile?.avatar_url ? <img src={profile.avatar_url} className="w-8 h-8 rounded-full object-cover border border-indigo-500" /> : <div className="bg-indigo-600 p-1.5 rounded-lg"><User size={16} fill="white" /></div>}
             <h1 className="text-lg font-bold tracking-tight">Hi, {profile?.username || 'Member'}</h1>
           </div>
           <div className="flex gap-2">
-            <button onClick={handleAdminToggle} className={`text-[10px] px-3 py-1.5 rounded-full border font-bold uppercase tracking-wider flex items-center gap-1 ${isAdmin ? 'bg-indigo-600 border-indigo-500' : 'border-white/20 text-white/50'}`}>
-                <Lock size={10} /> {isAdmin ? "Admin" : "Mem"}
-            </button>
+            <button onClick={handleAdminToggle} className={`text-[10px] px-3 py-1.5 rounded-full border font-bold uppercase tracking-wider flex items-center gap-1 ${isAdmin ? 'bg-indigo-600 border-indigo-500' : 'border-white/20 text-white/50'}`}><Lock size={10} /> {isAdmin ? "Admin" : "Mem"}</button>
             <button onClick={handleLogout} className="text-gray-500"><LogOut size={16}/></button>
           </div>
         </nav>
@@ -286,24 +247,14 @@ const App = () => {
 
       <main className={`pt-20 px-4 max-w-lg mx-auto relative ${isCallActive ? 'p-0 max-w-full h-screen overflow-hidden' : ''}`}>
         
-        {/* --- VIDEO CALL UI (High Z-Index Fix) --- */}
         {isCallActive && (
            <div className="fixed inset-0 bg-black z-50 flex flex-col">
              <div className="absolute top-0 left-0 right-0 p-6 z-10 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
-                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
-                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> 
-                    <span className="text-xs font-bold">Live</span>
-                </div>
+                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10"><span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span><span className="text-xs font-bold">Live</span></div>
              </div>
              <div className="flex-1 relative">
                 <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="text-center bg-black/40 backdrop-blur-md p-4 rounded-2xl border border-white/10">
-                        <User size={32} className="text-white/50 mx-auto mb-2"/>
-                        <p className="text-white/80 font-bold">You are the Host</p>
-                        <p className="text-white/40 text-xs">Waiting for others...</p>
-                    </div>
-                </div>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="text-center bg-black/40 backdrop-blur-md p-4 rounded-2xl border border-white/10"><User size={32} className="text-white/50 mx-auto mb-2"/><p className="text-white/80 font-bold">You are the Host</p><p className="text-white/40 text-xs">Waiting for others...</p></div></div>
              </div>
              <div className="absolute bottom-12 left-0 right-0 flex justify-center gap-8 z-50 px-8">
                <button onClick={() => setMicOn(!micOn)} className={`p-5 rounded-full shadow-2xl transition-all ${micOn ? 'bg-gray-800/80 backdrop-blur-md text-white' : 'bg-white text-black'}`}>{micOn ? <Mic size={24}/> : <MicOff size={24}/>}</button>
@@ -313,50 +264,27 @@ const App = () => {
            </div>
         )}
 
-        {/* --- DASHBOARD TAB --- */}
         {!isCallActive && activeTab === 'dashboard' && (
            <div className="space-y-6 animate-in zoom-in duration-300">
-             {/* STREAK CARD */}
              <div className="bg-gradient-to-r from-orange-600 to-red-600 rounded-3xl p-6 relative overflow-hidden flex items-center justify-between">
-               <div>
-                  <h2 className="text-2xl font-bold">Daily Streak</h2>
-                  <p className="text-white/80 text-sm">You're on fire!</p>
-               </div>
+               <div><h2 className="text-2xl font-bold">Daily Streak</h2><p className="text-white/80 text-sm">You're on fire!</p></div>
                <div className="text-5xl font-black flex items-center gap-1"><Flame size={40} fill="white" /> {profile?.streak_count || 1}</div>
              </div>
-
-             {/* PROFILE CARD */}
              <div className="bg-gray-900 border border-white/10 rounded-3xl p-6 text-center">
                 <div className="relative inline-block">
-                    {profile?.avatar_url ? (
-                        <img src={profile.avatar_url} className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-4 border-indigo-500" />
-                    ) : (
-                        <div className="w-24 h-24 bg-gray-800 rounded-full mx-auto mb-4 flex items-center justify-center border-4 border-gray-700"><User size={40}/></div>
-                    )}
-                    <label className="absolute bottom-4 right-0 bg-white text-black p-2 rounded-full cursor-pointer hover:scale-110 transition">
-                        <Camera size={14}/>
-                        <input type="file" accept="image/*" className="hidden" onChange={handleUpdateAvatar}/>
-                    </label>
+                    {profile?.avatar_url ? <img src={profile.avatar_url} className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-4 border-indigo-500" /> : <div className="w-24 h-24 bg-gray-800 rounded-full mx-auto mb-4 flex items-center justify-center border-4 border-gray-700"><User size={40}/></div>}
+                    <label className="absolute bottom-4 right-0 bg-white text-black p-2 rounded-full cursor-pointer hover:scale-110 transition"><Camera size={14}/><input type="file" accept="image/*" className="hidden" onChange={handleUpdateAvatar}/></label>
                 </div>
                 <h3 className="text-xl font-bold">{profile?.username || "Update Name"}</h3>
                 <p className="text-gray-500 text-sm">Member since 2026</p>
              </div>
-
-             {/* DASHBOARD ACTIONS */}
              <div className="grid grid-cols-2 gap-4">
-               <button onClick={() => setActiveTab('vote')} className="bg-gray-900 p-6 rounded-3xl border border-white/5 hover:border-indigo-500/50 transition group">
-                 <div className="w-12 h-12 bg-gray-800 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-indigo-500 group-hover:text-white transition-colors"><Trophy size={24}/></div>
-                 <span className="font-bold text-gray-200">Vote Next</span>
-               </button>
-               <button onClick={startCall} className="bg-gray-900 p-6 rounded-3xl border border-white/5 hover:border-green-500/50 transition group">
-                 <div className="w-12 h-12 bg-gray-800 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-green-500 group-hover:text-white transition-colors"><Camera size={24}/></div>
-                 <span className="font-bold text-gray-200">Join Live</span>
-               </button>
+               <button onClick={() => setActiveTab('vote')} className="bg-gray-900 p-6 rounded-3xl border border-white/5 hover:border-indigo-500/50 transition group"><div className="w-12 h-12 bg-gray-800 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-indigo-500 group-hover:text-white transition-colors"><Trophy size={24}/></div><span className="font-bold text-gray-200">Vote Next</span></button>
+               <button onClick={startCall} className="bg-gray-900 p-6 rounded-3xl border border-white/5 hover:border-green-500/50 transition group"><div className="w-12 h-12 bg-gray-800 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-green-500 group-hover:text-white transition-colors"><Camera size={24}/></div><span className="font-bold text-gray-200">Join Live</span></button>
              </div>
           </div>
         )}
 
-        {/* --- LIBRARY TAB --- */}
         {!isCallActive && activeTab === 'library' && (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-between items-end px-1">
@@ -364,44 +292,55 @@ const App = () => {
                {isAdmin && <button onClick={() => setShowUploadForm(true)} className="bg-white text-black px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2"><Plus size={16}/> Add</button>}
             </div>
             <div className="grid grid-cols-2 gap-4">
-               {libraryBooks.map(book => (
-                  <div key={book.id} className="group relative">
-                    <div className="aspect-[2/3] bg-gray-900 rounded-xl mb-3 relative overflow-hidden">
-                      <img src={book.cover} className="w-full h-full object-cover opacity-90" />
-                      <a href={book.pdf_url} target="_blank" className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition"><span className="bg-white text-black px-3 py-1 rounded-full text-xs font-bold">Read</span></a>
-                      {isAdmin && <button onClick={(e) => { e.preventDefault(); handleDeleteBook(book.id); }} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition hover:scale-110 shadow-lg z-20"><Trash2 size={14}/></button>}
+               {libraryBooks.map(book => {
+                  const voteCount = book.voted_by ? book.voted_by.length : 0;
+                  const hasVoted = book.voted_by && book.voted_by.includes(session.user.id);
+                  return (
+                    <div key={book.id} className="group relative">
+                        <div className="aspect-[2/3] bg-gray-900 rounded-xl mb-3 relative overflow-hidden">
+                        <img src={book.cover} className="w-full h-full object-cover opacity-90" />
+                        <a href={book.pdf_url} target="_blank" className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition"><span className="bg-white text-black px-3 py-1 rounded-full text-xs font-bold">Read</span></a>
+                        {isAdmin && <button onClick={(e) => { e.preventDefault(); handleDeleteBook(book.id); }} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition hover:scale-110 shadow-lg z-20"><Trash2 size={14}/></button>}
+                        </div>
+                        <div className="flex justify-between items-start">
+                            <div className="flex-1"><h3 className="font-bold text-sm line-clamp-1">{book.title}</h3><p className="text-xs text-gray-400">{book.author}</p></div>
+                            <button onClick={() => handleVote(book)} className={`flex flex-col items-center text-xs transition ${hasVoted ? 'text-yellow-400' : 'text-gray-500 hover:text-white'}`}>
+                                <Trophy size={14} fill={hasVoted ? "currentColor" : "none"}/>{voteCount}
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex justify-between items-start">
-                        <div className="flex-1"><h3 className="font-bold text-sm line-clamp-1">{book.title}</h3><p className="text-xs text-gray-400">{book.author}</p></div>
-                        <button onClick={() => handleVote(book.id, book.votes)} className="flex flex-col items-center text-xs text-gray-500 hover:text-indigo-400"><Trophy size={14} className={book.votes > 0 ? "text-yellow-400" : ""}/>{book.votes || 0}</button>
-                    </div>
-                  </div>
-                ))}
+                  );
+               })}
             </div>
           </div>
         )}
 
-        {/* --- VOTE TAB (Alternative View) --- */}
         {!isCallActive && activeTab === 'vote' && (
             <div className="space-y-6 animate-in slide-in-from-right duration-300">
                 <h2 className="text-3xl font-bold px-1">Top Voted</h2>
                 <div className="space-y-4">
-                    {libraryBooks.sort((a,b) => (b.votes || 0) - (a.votes || 0)).slice(0, 3).map((book, index) => (
-                        <div key={book.id} className="bg-gray-900 p-4 rounded-2xl flex items-center gap-4 border border-white/10">
-                            <div className="text-2xl font-bold text-gray-600">#{index + 1}</div>
-                            <img src={book.cover} className="w-12 h-16 object-cover rounded-lg"/>
-                            <div className="flex-1">
-                                <h3 className="font-bold">{book.title}</h3>
-                                <p className="text-xs text-gray-400">{book.votes || 0} Votes</p>
-                            </div>
-                            <button onClick={() => handleVote(book.id, book.votes)} className="bg-indigo-600 p-3 rounded-full"><Trophy size={16}/></button>
-                        </div>
-                    ))}
+                    {libraryBooks
+                        .sort((a,b) => ((b.voted_by?.length || 0) - (a.voted_by?.length || 0)))
+                        .slice(0, 3)
+                        .map((book, index) => {
+                            const voteCount = book.voted_by ? book.voted_by.length : 0;
+                            const hasVoted = book.voted_by && book.voted_by.includes(session.user.id);
+                            return (
+                                <div key={book.id} className="bg-gray-900 p-4 rounded-2xl flex items-center gap-4 border border-white/10">
+                                    <div className="text-2xl font-bold text-gray-600">#{index + 1}</div>
+                                    <img src={book.cover} className="w-12 h-16 object-cover rounded-lg"/>
+                                    <div className="flex-1">
+                                        <h3 className="font-bold">{book.title}</h3>
+                                        <p className="text-xs text-gray-400">{voteCount} Votes</p>
+                                    </div>
+                                    <button onClick={() => handleVote(book)} className={`p-3 rounded-full transition ${hasVoted ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-white'}`}><Trophy size={16}/></button>
+                                </div>
+                            );
+                    })}
                 </div>
             </div>
         )}
 
-        {/* --- CHAT TAB --- */}
         {!isCallActive && activeTab === 'chat' && (
             <div className="flex flex-col h-[75vh]">
                 <h2 className="text-2xl font-bold px-1 mb-4">Chat</h2>
@@ -428,7 +367,6 @@ const App = () => {
             </div>
         )}
 
-        {/* --- UPLOAD MODAL --- */}
         {showUploadForm && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
             <div className="bg-gray-900 rounded-3xl w-full max-w-sm p-6">
@@ -439,20 +377,21 @@ const App = () => {
                 <input type="file" accept="application/pdf" onChange={e => setSelectedPdf(e.target.files[0])} className="text-sm text-gray-500" />
                 <input type="file" accept="image/*" onChange={e => setSelectedCover(e.target.files[0])} className="text-sm text-gray-500" />
                 <button disabled={isUploading} className="w-full bg-indigo-600 font-bold py-3 rounded-xl">{isUploading ? "Uploading..." : "Save"}</button>
-                <button type="button" onClick={() => setShowUploadForm(false)} className="w-full text-gray-500 mt-2">Cancel</button>
+                <button type="button" onClick={closeAndResetForm} className="w-full text-gray-500 mt-2">Cancel</button>
               </form>
             </div>
           </div>
         )}
 
-        {/* --- NAV BAR --- */}
-        <div className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-white/10 flex justify-around p-2 pb-8 z-30">
+        {!isCallActive && (
+          <div className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-white/10 flex justify-around p-2 pb-8 z-30">
             {[{ id: 'dashboard', icon: Home, label: 'Home' }, { id: 'library', icon: BookOpen, label: 'Library' }, { id: 'vote', icon: Trophy, label: 'Vote' }, { id: 'chat', icon: MessageCircle, label: 'Chat' }].map((tab) => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-1 p-2 w-20 ${activeTab === tab.id ? 'text-white' : 'text-gray-500'}`}>
                 <tab.icon size={20} /><span className="text-[10px] font-bold">{tab.label}</span>
               </button>
             ))}
-        </div>
+          </div>
+        )}
       </main>
     </div>
   );
