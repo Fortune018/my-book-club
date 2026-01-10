@@ -122,10 +122,13 @@ const App = () => {
     if (data) await supabase.from('profiles').update({ last_seen: new Date() }).eq('id', userId);
   };
 
+  // --- INSTANT AVATAR UPDATE (INCREASED LIMIT TO 10MB) ---
   const handleUpdateAvatar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) return alert("Image too big! Keep it under 2MB.");
+
+    // INCREASED LIMIT TO 10MB
+    if (file.size > 10 * 1024 * 1024) return alert("Image too big! Keep it under 10MB.");
 
     const objectUrl = URL.createObjectURL(file);
     setProfile(prev => ({ ...prev, avatar_url: objectUrl }));
@@ -145,15 +148,11 @@ const App = () => {
     }
   };
 
-  // --- NEW: UPDATE USERNAME FUNCTION ---
+  // --- UPDATE USERNAME ---
   const handleUpdateUsername = async () => {
     const newName = window.prompt("Enter your new display name:", profile?.username || "");
-    if (!newName) return; // User cancelled
-
-    // Update Local State instantly
+    if (!newName) return; 
     setProfile(prev => ({ ...prev, username: newName }));
-
-    // Update DB
     const { error } = await supabase.from('profiles').update({ username: newName }).eq('id', session.user.id);
     if (error) alert("Could not save name");
   };
@@ -169,7 +168,7 @@ const App = () => {
     setChatMessages(data || []);
   }
 
-  // --- 4. CHAT UPGRADES ---
+  // --- 4. CHAT FUNCTIONS ---
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !profile) return;
@@ -233,7 +232,7 @@ const App = () => {
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- 6. UPLOAD & DELETE ---
+  // --- 6. UPLOAD & DELETE (INCREASED LIMITS) ---
   const closeAndResetForm = () => {
     setShowUploadForm(false); setNewBookTitle(""); setNewBookAuthor(""); setSelectedPdf(null); setSelectedCover(null); setIsUploading(false);
   };
@@ -241,7 +240,10 @@ const App = () => {
   const handleUploadBook = async (e) => {
     e.preventDefault();
     if (!newBookTitle || !selectedPdf) return alert("Select a PDF!");
-    if (selectedPdf.size > 10 * 1024 * 1024) return alert("PDF too big (Max 10MB)");
+    
+    // INCREASED LIMITS: PDF (15MB), Cover (10MB)
+    if (selectedPdf.size > 15 * 1024 * 1024) return alert("PDF too big (Max 15MB)");
+    if (selectedCover && selectedCover.size > 10 * 1024 * 1024) return alert("Cover image too big (Max 10MB)");
     
     setIsUploading(true);
     try {
@@ -348,7 +350,6 @@ const App = () => {
                     {profile?.avatar_url ? <img src={profile.avatar_url} className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-4 border-indigo-500" /> : <div className="w-24 h-24 bg-gray-800 rounded-full mx-auto mb-4 flex items-center justify-center border-4 border-gray-700"><User size={40}/></div>}
                     <label className="absolute bottom-4 right-0 bg-white text-black p-2 rounded-full cursor-pointer hover:scale-110 transition"><Camera size={14}/><input type="file" accept="image/*" className="hidden" onChange={handleUpdateAvatar}/></label>
                 </div>
-                {/* --- UPDATE NAME BUTTON (Interactive Now) --- */}
                 <button onClick={handleUpdateUsername} className="flex items-center gap-2 mx-auto justify-center hover:opacity-80 transition">
                     <h3 className="text-xl font-bold">{profile?.username || "Update Name"}</h3>
                     <Edit3 size={14} className="text-gray-500"/>
@@ -362,9 +363,6 @@ const App = () => {
           </div>
         )}
 
-        {/* ... Rest of app (Library, Vote, Chat, etc.) is the same ... */}
-        {/* I am omitting the bottom half here to save space, but you can paste the FULL file above which includes everything! */}
-        
         {!isCallActive && activeTab === 'library' && (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-between items-end px-1">
