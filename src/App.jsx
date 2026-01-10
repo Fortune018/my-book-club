@@ -52,12 +52,12 @@ const App = () => {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) fetchProfile(session.user.id);
+      if (session) fetchProfile(session.user.id, session.user.email);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) fetchProfile(session.user.id);
+      if (session) fetchProfile(session.user.id, session.user.email);
     });
 
     return () => subscription.unsubscribe();
@@ -97,7 +97,8 @@ const App = () => {
     if (authMode === 'signup') {
       const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
       if (!signUpError && data.user) {
-        await supabase.from('profiles').insert([{ id: data.user.id, email: email, username: username, streak_count: 1, last_seen: new Date() }]);
+        // Upsert ensures we don't crash if user exists
+        await supabase.from('profiles').upsert([{ id: data.user.id, email: email, username: username, streak_count: 1, last_seen: new Date() }]);
         alert("Account created! You can now log in.");
         setAuthMode('login');
       }
@@ -116,18 +117,25 @@ const App = () => {
     setProfile(null);
   };
 
-  const fetchProfile = async (userId) => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    setProfile(data);
-    if (data) await supabase.from('profiles').update({ last_seen: new Date() }).eq('id', userId);
+  // --- SELF-HEALING PROFILE FETCH ---
+  const fetchProfile = async (userId, userEmail) => {
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    
+    if (!data) {
+        // GHOST USER DETECTED! HEAL IT.
+        const newProfile = { id: userId, email: userEmail, username: "Member", streak_count: 1, last_seen: new Date() };
+        await supabase.from('profiles').upsert([newProfile]);
+        setProfile(newProfile);
+    } else {
+        setProfile(data);
+        await supabase.from('profiles').update({ last_seen: new Date() }).eq('id', userId);
+    }
   };
 
-  // --- INSTANT AVATAR UPDATE (INCREASED LIMIT TO 10MB) ---
+  // --- ROBUST AVATAR UPDATE (UPSERT) ---
   const handleUpdateAvatar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    // INCREASED LIMIT TO 10MB
     if (file.size > 10 * 1024 * 1024) return alert("Image too big! Keep it under 10MB.");
 
     const objectUrl = URL.createObjectURL(file);
@@ -139,21 +147,26 @@ const App = () => {
       const { error: uploadError } = await supabase.storage.from('book-files').upload(fileName, file);
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('book-files').getPublicUrl(fileName);
-      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', session.user.id);
+      
+      // UPSERT IS THE KEY: Creates row if missing
+      await supabase.from('profiles').upsert({ id: session.user.id, avatar_url: publicUrl });
+      
     } catch (error) {
       alert("Error uploading image");
-      fetchProfile(session.user.id);
+      fetchProfile(session.user.id, session.user.email);
     } finally {
       setIsUploading(false);
     }
   };
 
-  // --- UPDATE USERNAME ---
+  // --- ROBUST USERNAME UPDATE (UPSERT) ---
   const handleUpdateUsername = async () => {
     const newName = window.prompt("Enter your new display name:", profile?.username || "");
     if (!newName) return; 
     setProfile(prev => ({ ...prev, username: newName }));
-    const { error } = await supabase.from('profiles').update({ username: newName }).eq('id', session.user.id);
+    
+    // UPSERT IS THE KEY
+    const { error } = await supabase.from('profiles').upsert({ id: session.user.id, username: newName });
     if (error) alert("Could not save name");
   };
 
@@ -232,7 +245,7 @@ const App = () => {
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- 6. UPLOAD & DELETE (INCREASED LIMITS) ---
+  // --- 6. UPLOAD & DELETE ---
   const closeAndResetForm = () => {
     setShowUploadForm(false); setNewBookTitle(""); setNewBookAuthor(""); setSelectedPdf(null); setSelectedCover(null); setIsUploading(false);
   };
@@ -241,7 +254,6 @@ const App = () => {
     e.preventDefault();
     if (!newBookTitle || !selectedPdf) return alert("Select a PDF!");
     
-    // INCREASED LIMITS: PDF (15MB), Cover (10MB)
     if (selectedPdf.size > 15 * 1024 * 1024) return alert("PDF too big (Max 15MB)");
     if (selectedCover && selectedCover.size > 10 * 1024 * 1024) return alert("Cover image too big (Max 10MB)");
     
