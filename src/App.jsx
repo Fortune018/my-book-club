@@ -4,7 +4,7 @@ import {
   Home, BookOpen, Trophy, Plus, X, UploadCloud, 
   MessageCircle, Mic, MicOff, Camera, CameraOff, PhoneOff, 
   Lock, Image as ImageIcon, Sparkles, User, LogOut,
-  Send, Trash2, Edit3, Pin, Flame, Smile
+  Send, Trash2, Edit3, Pin, Flame, Smile, CheckCircle, AlertCircle
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -22,6 +22,9 @@ const App = () => {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [profile, setProfile] = useState(null);
+
+  // --- UI STATES ---
+  const [notification, setNotification] = useState(null); // { message, type: 'success' | 'error' }
 
   // --- APP STATES ---
   const [activeTab, setActiveTab] = useState('dashboard'); 
@@ -89,17 +92,29 @@ const App = () => {
     if (chatBottomRef.current) chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, activeTab]);
 
+  // --- HELPERS ---
+  const showNotification = (msg, type = 'success') => {
+    setNotification({ message: msg, type });
+    setTimeout(() => setNotification(null), 4000); // Hide after 4s
+  };
+
   // --- 2. AUTH FUNCTIONS ---
   const handleAuth = async (e) => {
     e.preventDefault();
     setIsUploading(true);
     let error;
     if (authMode === 'signup') {
-      const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+      const { data, error: signUpError } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+            // THIS FIXES THE BROKEN LINK ISSUE:
+            emailRedirectTo: 'https://mybookclubrosy.vercel.app' 
+        }
+      });
       if (!signUpError && data.user) {
-        // Upsert ensures we don't crash if user exists
         await supabase.from('profiles').upsert([{ id: data.user.id, email: email, username: username, streak_count: 1, last_seen: new Date() }]);
-        alert("Account created! You can now log in.");
+        showNotification("Check your email to confirm signup!", 'success');
         setAuthMode('login');
       }
       error = signUpError;
@@ -107,7 +122,7 @@ const App = () => {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       error = signInError;
     }
-    if (error) alert(error.message);
+    if (error) showNotification(error.message, 'error');
     setIsUploading(false);
   };
 
@@ -117,12 +132,9 @@ const App = () => {
     setProfile(null);
   };
 
-  // --- SELF-HEALING PROFILE FETCH ---
   const fetchProfile = async (userId, userEmail) => {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    
     if (!data) {
-        // GHOST USER DETECTED! HEAL IT.
         const newProfile = { id: userId, email: userEmail, username: "Member", streak_count: 1, last_seen: new Date() };
         await supabase.from('profiles').upsert([newProfile]);
         setProfile(newProfile);
@@ -132,11 +144,10 @@ const App = () => {
     }
   };
 
-  // --- ROBUST AVATAR UPDATE (UPSERT) ---
   const handleUpdateAvatar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) return alert("Image too big! Keep it under 10MB.");
+    if (file.size > 10 * 1024 * 1024) return showNotification("Image too big! Max 10MB.", 'error');
 
     const objectUrl = URL.createObjectURL(file);
     setProfile(prev => ({ ...prev, avatar_url: objectUrl }));
@@ -147,27 +158,23 @@ const App = () => {
       const { error: uploadError } = await supabase.storage.from('book-files').upload(fileName, file);
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('book-files').getPublicUrl(fileName);
-      
-      // UPSERT IS THE KEY: Creates row if missing
       await supabase.from('profiles').upsert({ id: session.user.id, avatar_url: publicUrl });
-      
+      showNotification("Profile picture updated!");
     } catch (error) {
-      alert("Error uploading image");
+      showNotification("Error uploading image", 'error');
       fetchProfile(session.user.id, session.user.email);
     } finally {
       setIsUploading(false);
     }
   };
 
-  // --- ROBUST USERNAME UPDATE (UPSERT) ---
   const handleUpdateUsername = async () => {
     const newName = window.prompt("Enter your new display name:", profile?.username || "");
     if (!newName) return; 
     setProfile(prev => ({ ...prev, username: newName }));
-    
-    // UPSERT IS THE KEY
     const { error } = await supabase.from('profiles').upsert({ id: session.user.id, username: newName });
-    if (error) alert("Could not save name");
+    if (error) showNotification("Could not save name", 'error');
+    else showNotification("Name updated!");
   };
 
   // --- 3. DATA FUNCTIONS ---
@@ -192,26 +199,20 @@ const App = () => {
 
     const tempId = Date.now();
     const tempMsg = {
-        id: tempId,
-        content: msgText,
-        user_id: session.user.id,
-        username: profile.username || "Member",
-        avatar_url: profile.avatar_url,
-        created_at: new Date().toISOString(),
-        pending: true 
+        id: tempId, content: msgText, user_id: session.user.id,
+        username: profile.username || "Member", avatar_url: profile.avatar_url,
+        created_at: new Date().toISOString(), pending: true 
     };
     setChatMessages(prev => [...prev, tempMsg]);
 
     const { data, error } = await supabase.from('messages').insert([{
-        content: msgText,
-        user_id: session.user.id,
-        username: profile.username || "Member",
-        avatar_url: profile.avatar_url
+        content: msgText, user_id: session.user.id,
+        username: profile.username || "Member", avatar_url: profile.avatar_url
     }]).select();
 
     if (error) {
         setChatMessages(prev => prev.filter(m => m.id !== tempId));
-        alert("Failed to send");
+        showNotification("Failed to send message", 'error');
     } else {
         setChatMessages(prev => prev.map(m => m.id === tempId ? data[0] : m));
     }
@@ -227,7 +228,6 @@ const App = () => {
     setNewMessage(prev => prev + emoji);
   };
 
-  // --- 5. SMART VOTE LOGIC ---
   const handleVote = async (book) => {
     const userId = session.user.id;
     let currentVoters = book.voted_by || [];
@@ -238,24 +238,21 @@ const App = () => {
     } else {
         newVoters = [...currentVoters, userId];
     }
-
     const updatedBooks = libraryBooks.map(b => b.id === book.id ? {...b, voted_by: newVoters} : b);
     setLibraryBooks(updatedBooks);
-    
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- 6. UPLOAD & DELETE ---
   const closeAndResetForm = () => {
     setShowUploadForm(false); setNewBookTitle(""); setNewBookAuthor(""); setSelectedPdf(null); setSelectedCover(null); setIsUploading(false);
   };
 
   const handleUploadBook = async (e) => {
     e.preventDefault();
-    if (!newBookTitle || !selectedPdf) return alert("Select a PDF!");
+    if (!newBookTitle || !selectedPdf) return showNotification("Select a PDF!", 'error');
     
-    if (selectedPdf.size > 15 * 1024 * 1024) return alert("PDF too big (Max 15MB)");
-    if (selectedCover && selectedCover.size > 10 * 1024 * 1024) return alert("Cover image too big (Max 10MB)");
+    if (selectedPdf.size > 15 * 1024 * 1024) return showNotification("PDF too big (Max 15MB)", 'error');
+    if (selectedCover && selectedCover.size > 10 * 1024 * 1024) return showNotification("Cover too big (Max 10MB)", 'error');
     
     setIsUploading(true);
     try {
@@ -274,8 +271,8 @@ const App = () => {
       await supabase.from('books').insert([{ title: newBookTitle, author: newBookAuthor, cover: coverUrl, pdf_url: pdfUrl, voted_by: [] }]);
       fetchBooks();
       closeAndResetForm();
-      alert("Book Uploaded!");
-    } catch (err) { alert(err.message); setIsUploading(false); }
+      showNotification("Book Uploaded Successfully!");
+    } catch (err) { showNotification(err.message, 'error'); setIsUploading(false); }
   };
 
   const handleDeleteBook = async (id) => {
@@ -284,13 +281,12 @@ const App = () => {
     if (!error) setLibraryBooks(libraryBooks.filter(book => book.id !== id));
   };
 
-  // --- 7. VIDEO & ADMIN ---
   const handleAdminToggle = () => {
     if (isAdmin) setIsAdmin(false);
-    else if (window.prompt("Enter Admin PIN:") === ADMIN_PIN) setIsAdmin(true);
+    else if (window.prompt("Enter Admin PIN:") === ADMIN_PIN) { setIsAdmin(true); showNotification("Admin Mode Activated"); }
   };
   const startCall = async () => {
-    try { setIsCallActive(true); const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); streamRef.current = stream; if (videoRef.current) videoRef.current.srcObject = stream; } catch (err) { alert("Camera Error"); setIsCallActive(false); }
+    try { setIsCallActive(true); const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); streamRef.current = stream; if (videoRef.current) videoRef.current.srcObject = stream; } catch (err) { showNotification("Camera Error", 'error'); setIsCallActive(false); }
   };
   const endCall = () => { setIsCallActive(false); if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop()); };
   const handleUpdateTopic = () => { const newTopic = window.prompt("Set new discussion topic:", discussionTopic); if (newTopic) setDiscussionTopic(newTopic); };
@@ -298,7 +294,15 @@ const App = () => {
   // --- RENDER LOGIN ---
   if (!session) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-black text-white flex items-center justify-center p-6 relative">
+        {/* NOTIFICATION BANNER */}
+        {notification && (
+            <div className={`fixed top-4 left-4 right-4 p-4 rounded-2xl flex items-center gap-3 shadow-2xl animate-in slide-in-from-top duration-300 z-50 ${notification.type === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
+                {notification.type === 'error' ? <AlertCircle size={24} /> : <CheckCircle size={24} />}
+                <p className="font-bold text-sm">{notification.message}</p>
+            </div>
+        )}
+
         <div className="w-full max-w-sm">
            <div className="flex justify-center mb-6"><div className="bg-indigo-600 p-3 rounded-2xl"><BookOpen size={32} /></div></div>
            <h1 className="text-3xl font-bold text-center mb-2">Mindful<span className="text-indigo-500">Readers</span></h1>
@@ -315,10 +319,18 @@ const App = () => {
     );
   }
 
-  const bgStyle = "min-h-screen bg-black font-sans pb-28 text-white";
+  const bgStyle = "min-h-screen bg-black font-sans pb-28 text-white relative";
 
   return (
     <div className={bgStyle}>
+      {/* NOTIFICATION BANNER (In App) */}
+      {notification && (
+        <div className={`fixed top-20 left-4 right-4 p-4 rounded-2xl flex items-center gap-3 shadow-2xl animate-in slide-in-from-top duration-300 z-[100] ${notification.type === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
+            {notification.type === 'error' ? <AlertCircle size={24} /> : <CheckCircle size={24} />}
+            <p className="font-bold text-sm">{notification.message}</p>
+        </div>
+      )}
+
       {!isCallActive && (
         <nav className="fixed top-0 left-0 right-0 z-30 bg-black/50 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
@@ -507,4 +519,4 @@ const App = () => {
   );
 };
 
-export default App
+export default App;
