@@ -108,8 +108,8 @@ const App = () => {
         email, 
         password,
         options: {
-            // THIS FIXES THE BROKEN LINK ISSUE:
-            emailRedirectTo: 'https://mybookclubrosy.vercel.app' 
+            // CORRECTED LINK, NO EXTRA BRACKETS
+            emailRedirectTo: 'https://my-book-club-rosy.vercel.app'
         }
       });
       if (!signUpError && data.user) {
