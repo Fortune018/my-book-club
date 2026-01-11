@@ -100,6 +100,9 @@ const App = () => {
 
   // --- 2. AUTH FUNCTIONS ---
   const handleAuth = async (e) => {
+    // --- 2. AUTH FUNCTIONS ---
+// Force Update 1
+const handleAuth = async (e) => {
     e.preventDefault();
     setIsUploading(true);
     let error;
