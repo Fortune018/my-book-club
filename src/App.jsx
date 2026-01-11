@@ -24,7 +24,7 @@ const App = () => {
   const [profile, setProfile] = useState(null);
 
   // --- UI STATES ---
-  const [notification, setNotification] = useState(null); // { message, type: 'success' | 'error' }
+  const [notification, setNotification] = useState(null); 
 
   // --- APP STATES ---
   const [activeTab, setActiveTab] = useState('dashboard'); 
@@ -32,7 +32,7 @@ const App = () => {
   const [libraryBooks, setLibraryBooks] = useState([]); 
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
-  const [discussionTopic, setDiscussionTopic] = useState("Introduction: First Impressions?");
+  const [discussionTopic, setDiscussionTopic] = useState("Introduction");
   const [showEmoji, setShowEmoji] = useState(false);
   
   // Forms & Loading
@@ -43,12 +43,8 @@ const App = () => {
   const [selectedPdf, setSelectedPdf] = useState(null); 
   const [selectedCover, setSelectedCover] = useState(null);
 
-  // Video
+  // Video State
   const [isCallActive, setIsCallActive] = useState(false);
-  const [micOn, setMicOn] = useState(true);
-  const [cameraOn, setCameraOn] = useState(true);
-  const videoRef = useRef(null);
-  const streamRef = useRef(null);
   const chatBottomRef = useRef(null);
 
   // --- 1. INITIALIZATION ---
@@ -95,28 +91,27 @@ const App = () => {
   // --- HELPERS ---
   const showNotification = (msg, type = 'success') => {
     setNotification({ message: msg, type });
-    setTimeout(() => setNotification(null), 4000); // Hide after 4s
+    setTimeout(() => setNotification(null), 4000); 
   };
 
   // --- 2. AUTH FUNCTIONS ---
-  // Cleaned up duplicate function declaration here
   const handleAuth = async (e) => {
     e.preventDefault();
     setIsUploading(true);
     let error;
     if (authMode === 'signup') {
+      // We turned off email verification in Supabase, so this will log in immediately
       const { data, error: signUpError } = await supabase.auth.signUp({ 
         email, 
         password,
         options: {
-            // Correct Link with Hyphens
             emailRedirectTo: 'https://my-book-club-rosy.vercel.app'
         }
       });
       if (!signUpError && data.user) {
         await supabase.from('profiles').upsert([{ id: data.user.id, email: email, username: username, streak_count: 1, last_seen: new Date() }]);
-        showNotification("Check your email to confirm signup!", 'success');
-        setAuthMode('login');
+        showNotification("Welcome to the Club!", 'success');
+        // Auto-login happens automatically via session listener
       }
       error = signUpError;
     } else {
@@ -286,17 +281,16 @@ const App = () => {
     if (isAdmin) setIsAdmin(false);
     else if (window.prompt("Enter Admin PIN:") === ADMIN_PIN) { setIsAdmin(true); showNotification("Admin Mode Activated"); }
   };
-  const startCall = async () => {
-    try { setIsCallActive(true); const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); streamRef.current = stream; if (videoRef.current) videoRef.current.srcObject = stream; } catch (err) { showNotification("Camera Error", 'error'); setIsCallActive(false); }
-  };
-  const endCall = () => { setIsCallActive(false); if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop()); };
+
+  const startCall = () => setIsCallActive(true);
+  const endCall = () => setIsCallActive(false);
+
   const handleUpdateTopic = () => { const newTopic = window.prompt("Set new discussion topic:", discussionTopic); if (newTopic) setDiscussionTopic(newTopic); };
 
   // --- RENDER LOGIN ---
   if (!session) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center p-6 relative">
-        {/* NOTIFICATION BANNER */}
         {notification && (
             <div className={`fixed top-4 left-4 right-4 p-4 rounded-2xl flex items-center gap-3 shadow-2xl animate-in slide-in-from-top duration-300 z-50 ${notification.type === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
                 {notification.type === 'error' ? <AlertCircle size={24} /> : <CheckCircle size={24} />}
@@ -324,7 +318,6 @@ const App = () => {
 
   return (
     <div className={bgStyle}>
-      {/* NOTIFICATION BANNER (In App) */}
       {notification && (
         <div className={`fixed top-20 left-4 right-4 p-4 rounded-2xl flex items-center gap-3 shadow-2xl animate-in slide-in-from-top duration-300 z-[100] ${notification.type === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
             {notification.type === 'error' ? <AlertCircle size={24} /> : <CheckCircle size={24} />}
@@ -349,17 +342,23 @@ const App = () => {
         
         {isCallActive && (
            <div className="fixed inset-0 bg-black z-50 flex flex-col">
-             <div className="absolute top-0 left-0 right-0 p-6 z-10 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
-                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10"><span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span><span className="text-xs font-bold">Live</span></div>
+             {/* HEADER */}
+             <div className="absolute top-0 left-0 right-0 p-4 z-10 flex justify-between items-center bg-black/50 backdrop-blur-md">
+                <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    <span className="text-white font-bold">Live Discussion</span>
+                </div>
+                <button onClick={endCall} className="bg-red-600 text-white px-4 py-2 rounded-full font-bold text-xs shadow-lg">Leave Call</button>
              </div>
-             <div className="flex-1 relative">
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="text-center bg-black/40 backdrop-blur-md p-4 rounded-2xl border border-white/10"><User size={32} className="text-white/50 mx-auto mb-2"/><p className="text-white/80 font-bold">You are the Host</p><p className="text-white/40 text-xs">Waiting for others...</p></div></div>
-             </div>
-             <div className="absolute bottom-12 left-0 right-0 flex justify-center gap-8 z-50 px-8">
-               <button onClick={() => setMicOn(!micOn)} className={`p-5 rounded-full shadow-2xl transition-all ${micOn ? 'bg-gray-800/80 backdrop-blur-md text-white' : 'bg-white text-black'}`}>{micOn ? <Mic size={24}/> : <MicOff size={24}/>}</button>
-               <button onClick={endCall} className="bg-red-500 p-6 rounded-2xl hover:scale-105 transition shadow-red-900/40 shadow-xl border-4 border-black"><PhoneOff size={32} fill="white" /></button>
-               <button onClick={() => setCameraOn(!cameraOn)} className={`p-5 rounded-full shadow-2xl transition-all ${cameraOn ? 'bg-gray-800/80 backdrop-blur-md text-white' : 'bg-white text-black'}`}>{cameraOn ? <Camera size={24}/> : <CameraOff size={24}/>}</button>
+
+             {/* THE VIDEO ROOM (Jitsi Embed) */}
+             <div className="flex-1 w-full h-full bg-gray-900">
+                <iframe 
+                    src={`https://meet.jit.si/MindfulReadersClub_${discussionTopic.replace(/[^a-zA-Z0-9]/g, '_')}`}
+                    allow="camera; microphone; fullscreen; display-capture; autoplay"
+                    className="w-full h-full border-0"
+                    title="Video Call"
+                ></iframe>
              </div>
            </div>
         )}
