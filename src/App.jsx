@@ -99,10 +99,8 @@ const App = () => {
   };
 
   // --- 2. AUTH FUNCTIONS ---
+  // Cleaned up duplicate function declaration here
   const handleAuth = async (e) => {
-    // --- 2. AUTH FUNCTIONS ---
-// Force Update 1
-const handleAuth = async (e) => {
     e.preventDefault();
     setIsUploading(true);
     let error;
@@ -111,7 +109,7 @@ const handleAuth = async (e) => {
         email, 
         password,
         options: {
-            // CORRECTED LINK, NO EXTRA BRACKETS
+            // Correct Link with Hyphens
             emailRedirectTo: 'https://my-book-club-rosy.vercel.app'
         }
       });
