@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   Home, BookOpen, Trophy, Plus, X, UploadCloud, 
   MessageCircle, Lock, User, LogOut, Send, Trash2, Edit3, Pin, Flame, 
-  Smile, CheckCircle, AlertCircle, Sparkles, Zap, Play, Link as LinkIcon, Video
+  Smile, CheckCircle, AlertCircle, Sparkles, Zap, Play, Camera
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -163,21 +163,20 @@ const App = () => {
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- NEW: SHARE MEETING LINK ---
+  // --- SAFE SHARE MEETING LINK ---
   const handleShareMeeting = async () => {
     const link = prompt("Paste your Google Meet or Zoom link here:");
     if (!link) return;
     if (!link.startsWith('http')) return showNotification("Link must start with http...", 'error');
-    
-    // Post a special bold message
     const msgText = `🎥 LIVE SESSION STARTED!\nClick to Join: ${link}`;
     await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url }]);
     setActiveTab('chat');
-    showNotification("Meeting link posted to chat!");
+    showNotification("Meeting link posted!");
   };
 
-  // --- NEW: URL PARSER ---
+  // --- SAFE URL PARSER ---
   const formatMessageContent = (content) => {
+    if (!content) return ""; // Crash Prevention Check
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     return content.split(urlRegex).map((part, i) => {
       if (part.match(urlRegex)) {
@@ -284,12 +283,12 @@ const App = () => {
                  {/* ADMIN ONLY BUTTON */}
                  {isAdmin ? (
                     <button onClick={handleShareMeeting} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
-                        <Video size={40} className="text-emerald-400 mb-2"/>
+                        <Camera size={40} className="text-emerald-400 mb-2"/>
                         <div><h2 className="text-lg font-bold text-emerald-100">Start Live</h2><p className="text-white/40 text-xs font-bold uppercase">Post Link</p></div>
                     </button>
                  ) : (
                     <button onClick={() => setActiveTab('chat')} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
-                        <Video size={40} className="text-emerald-400 mb-2"/>
+                        <Camera size={40} className="text-emerald-400 mb-2"/>
                         <div><h2 className="text-lg font-bold text-emerald-100">Join Live</h2><p className="text-white/40 text-xs font-bold uppercase">Check Chat</p></div>
                     </button>
                  )}
