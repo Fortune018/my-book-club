@@ -13,8 +13,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ADMIN_PIN = "2026"; 
 
-// !!! REPLACE THIS WITH YOUR WHEREBY LINK !!!
-const PERMANENT_MEETING_LINK = "https://whereby.com/mindful-readers-demo"; 
+// 🚨 PASTE YOUR REAL WHEREBY LINK HERE 🚨
+const PERMANENT_MEETING_LINK = "https://whereby.com/mindful-readers"; 
 
 const App = () => {
   // --- STATES ---
@@ -90,7 +90,17 @@ const App = () => {
     if (session) {
       fetchBooks();
       fetchMessages();
-      const channel = supabase.channel('public:messages').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => { setChatMessages(prev => { if (prev.find(m => m.id === payload.new.id)) return prev; return [...prev, payload.new]; }); }).subscribe();
+      const channel = supabase.channel('public:messages')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => { 
+            // Handle Updates (Pins) and Inserts
+            if(payload.eventType === 'UPDATE') {
+                setChatMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new : m));
+            } else if (payload.eventType === 'INSERT') {
+                setChatMessages(prev => { if (prev.find(m => m.id === payload.new.id)) return prev; return [...prev, payload.new]; }); 
+            } else if (payload.eventType === 'DELETE') {
+                setChatMessages(prev => prev.filter(m => m.id !== payload.old.id));
+            }
+        }).subscribe();
       return () => supabase.removeChannel(channel);
     }
   }, [session]);
@@ -168,19 +178,28 @@ const App = () => {
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- NEW: DIRECT JOIN LOGIC ---
+  // --- JOIN LIVE ---
   const handleJoinLive = () => {
-    // This opens the link in a new tab immediately. NO CHAT SEARCHING.
+    // Opens link immediately.
     window.open(PERMANENT_MEETING_LINK, '_blank');
   };
 
   const handleAdminStartLive = async () => {
-    // Admin announces the live, but the button for users stays consistent
     const msgText = `🎥 We are starting LIVE now! Click the 'Join Live' button on the dashboard to enter.`;
-    await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url }]);
-    // Also open it for the admin
+    await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url, is_pinned: true }]);
     window.open(PERMANENT_MEETING_LINK, '_blank');
   };
+
+  // --- PINNING LOGIC ---
+  const handlePinMessage = async (msg) => {
+      const newStatus = !msg.is_pinned;
+      // Optimistic update
+      setChatMessages(prev => prev.map(m => m.id === msg.id ? { ...m, is_pinned: newStatus } : m));
+      await supabase.from('messages').update({ is_pinned: newStatus }).eq('id', msg.id);
+      showNotification(newStatus ? "Message Pinned!" : "Message Unpinned");
+  };
+
+  const pinnedMessage = chatMessages.find(m => m.is_pinned);
 
   // --- LINK PARSER ---
   const formatMessageContent = (content) => {
@@ -347,16 +366,33 @@ const App = () => {
             <div className="flex flex-col h-[80vh] animate-in slide-in-from-bottom duration-500">
                 <div className="bg-indigo-950/40 backdrop-blur-xl border border-indigo-500/20 p-4 rounded-2xl mb-4 relative shadow-lg">
                    <div className="flex items-center gap-2 mb-1"><Sparkles size={12} className="text-indigo-400"/><span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Live Discussion</span></div>
-                   <p className="text-lg font-bold text-white pr-6 leading-tight">"{discussionTopic}"</p>
+                   
+                   {/* PINNED MESSAGE BANNER */}
+                   {pinnedMessage && (
+                       <div className="bg-indigo-900/50 p-3 mt-2 rounded-lg border-l-4 border-indigo-400 flex justify-between items-center animate-in slide-in-from-top cursor-pointer hover:bg-indigo-900/70 transition">
+                            <div className="overflow-hidden">
+                                <p className="text-[10px] text-indigo-300 font-bold uppercase mb-0.5 flex items-center gap-1"><Pin size={10}/> Pinned</p>
+                                <p className="text-sm font-medium text-white line-clamp-1">{pinnedMessage.content}</p>
+                            </div>
+                            {isAdmin && <button onClick={() => handlePinMessage(pinnedMessage)} className="p-2 text-white/30 hover:text-white"><X size={14}/></button>}
+                       </div>
+                   )}
+                   
                    {isAdmin && <button onClick={() => {const t = prompt("New Topic"); if(t) setDiscussionTopic(t)}} className="absolute top-4 right-4 text-white/30 hover:text-white"><Edit3 size={14}/></button>}
                 </div>
+
                 <div className="flex-1 space-y-4 overflow-y-auto mb-4 scrollbar-hide px-1 pb-4">
                     {chatMessages.map(msg => (
                         <div key={msg.id} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 ${msg.user_id === session.user.id ? 'flex-row-reverse' : ''}`}>
                             <img src={msg.avatar_url || "https://via.placeholder.com/40"} onError={(e) => e.target.src="https://via.placeholder.com/40"} className="w-8 h-8 rounded-full object-cover border border-white/10 shadow-sm bg-gray-600"/>
-                            <div className={`relative p-3 rounded-2xl max-w-[80%] text-sm shadow-md ${msg.user_id === session.user.id ? 'bg-indigo-600/90 text-white rounded-tr-none' : 'bg-white/10 backdrop-blur-md text-white/90 rounded-tl-none border border-white/5'}`}>
-                                <p className="text-[10px] font-bold opacity-50 mb-1">{msg.username}</p> 
-                                {/* LINK PARSER */}
+                            <div className={`relative p-3 rounded-2xl max-w-[80%] text-sm shadow-md ${msg.user_id === session.user.id ? 'bg-indigo-600/90 text-white rounded-tr-none' : 'bg-white/10 backdrop-blur-md text-white/90 rounded-tl-none border border-white/5'} ${msg.is_pinned ? 'border-indigo-500/50 ring-1 ring-indigo-500/30' : ''}`}>
+                                <p className="text-[10px] font-bold opacity-50 mb-1 flex justify-between items-center">
+                                    {msg.username}
+                                    {/* ADMIN PIN BUTTON */}
+                                    {isAdmin && !msg.pending && (
+                                        <button onClick={() => handlePinMessage(msg)} className={`ml-2 hover:text-indigo-300 ${msg.is_pinned ? 'text-indigo-400' : 'text-white/20'}`}><Pin size={12} fill={msg.is_pinned ? "currentColor" : "none"}/></button>
+                                    )}
+                                </p> 
                                 <div className="break-words">{formatMessageContent(msg.content)}</div>
                                 {msg.user_id === session.user.id && !msg.pending && <button onClick={() => handleDeleteMessage(msg.id)} className="absolute -left-8 top-2 text-white/20 hover:text-red-400"><Trash2 size={12}/></button>}
                             </div>
