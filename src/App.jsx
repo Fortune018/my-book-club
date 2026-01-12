@@ -80,9 +80,7 @@ const App = () => {
             }
             setProfile({ ...data, streak_count: newStreak });
         }
-    } catch (e) {
-        console.error("Profile Error", e);
-    }
+    } catch (e) { console.error("Profile Error", e); }
   };
 
   useEffect(() => {
@@ -167,14 +165,27 @@ const App = () => {
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- SAFE SHARE MEETING LINK (Plain Text Version) ---
+  // --- SHARE MEETING (RESTORED) ---
   const handleShareMeeting = async () => {
     const link = prompt("Paste your Google Meet or Zoom link here:");
     if (!link) return;
-    const msgText = `🎥 LIVE SESSION: ${link}`; // Keeping it simple to prevent crash
+    if (!link.startsWith('http')) return showNotification("Link must start with http...", 'error');
+    const msgText = `🎥 LIVE SESSION: ${link}`; 
     await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url }]);
     setActiveTab('chat');
     showNotification("Meeting link posted!");
+  };
+
+  // --- LINK PARSER (RESTORED & SECURED) ---
+  const formatMessageContent = (content) => {
+    if (!content) return "";
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return content.split(urlRegex).map((part, i) => {
+      if (part.match(urlRegex)) {
+        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-indigo-400 font-bold underline break-all hover:text-indigo-300">{part}</a>;
+      }
+      return part;
+    });
   };
 
   // Basic CRUD
@@ -268,7 +279,7 @@ const App = () => {
                     <Flame size={40} className="text-white mb-2"/>
                     <div><h2 className="text-3xl font-black">{profile?.streak_count || 1}</h2><p className="text-orange-100 text-xs font-bold uppercase">Day Streak</p></div>
                  </div>
-                 {/* SAFE ADMIN BUTTON (No Video Icon) */}
+                 {/* SAFE ADMIN BUTTON (Used Camera Icon) */}
                  {isAdmin ? (
                     <button onClick={handleShareMeeting} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
                         <Camera size={40} className="text-emerald-400 mb-2"/>
@@ -339,8 +350,8 @@ const App = () => {
                             <img src={msg.avatar_url || "https://via.placeholder.com/40"} onError={(e) => e.target.src="https://via.placeholder.com/40"} className="w-8 h-8 rounded-full object-cover border border-white/10 shadow-sm bg-gray-600"/>
                             <div className={`relative p-3 rounded-2xl max-w-[80%] text-sm shadow-md ${msg.user_id === session.user.id ? 'bg-indigo-600/90 text-white rounded-tr-none' : 'bg-white/10 backdrop-blur-md text-white/90 rounded-tl-none border border-white/5'}`}>
                                 <p className="text-[10px] font-bold opacity-50 mb-1">{msg.username}</p> 
-                                {/* SAFE TEXT RENDERING ONLY */}
-                                <div className="break-words">{msg.content || ""}</div>
+                                {/* RESTORED LINK PARSING */}
+                                <div className="break-words">{formatMessageContent(msg.content)}</div>
                                 {msg.user_id === session.user.id && !msg.pending && <button onClick={() => handleDeleteMessage(msg.id)} className="absolute -left-8 top-2 text-white/20 hover:text-red-400"><Trash2 size={12}/></button>}
                             </div>
                         </div>
