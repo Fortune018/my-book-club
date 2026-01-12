@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   Home, BookOpen, Trophy, Plus, X, UploadCloud, 
   MessageCircle, Lock, User, LogOut, Send, Trash2, Edit3, Pin, Flame, 
-  Smile, CheckCircle, AlertCircle, Sparkles, Zap, Play, Camera
+  Smile, CheckCircle, AlertCircle, Sparkles, Zap, Play, Camera, Video
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -12,6 +12,9 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ADMIN_PIN = "2026"; 
+
+// !!! REPLACE THIS WITH YOUR WHEREBY LINK !!!
+const PERMANENT_MEETING_LINK = "https://whereby.com/mindful-readers-demo"; 
 
 const App = () => {
   // --- STATES ---
@@ -165,18 +168,21 @@ const App = () => {
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- SHARE MEETING (RESTORED) ---
-  const handleShareMeeting = async () => {
-    const link = prompt("Paste your Google Meet or Zoom link here:");
-    if (!link) return;
-    if (!link.startsWith('http')) return showNotification("Link must start with http...", 'error');
-    const msgText = `🎥 LIVE SESSION: ${link}`; 
-    await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url }]);
-    setActiveTab('chat');
-    showNotification("Meeting link posted!");
+  // --- NEW: DIRECT JOIN LOGIC ---
+  const handleJoinLive = () => {
+    // This opens the link in a new tab immediately. NO CHAT SEARCHING.
+    window.open(PERMANENT_MEETING_LINK, '_blank');
   };
 
-  // --- LINK PARSER (RESTORED & SECURED) ---
+  const handleAdminStartLive = async () => {
+    // Admin announces the live, but the button for users stays consistent
+    const msgText = `🎥 We are starting LIVE now! Click the 'Join Live' button on the dashboard to enter.`;
+    await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url }]);
+    // Also open it for the admin
+    window.open(PERMANENT_MEETING_LINK, '_blank');
+  };
+
+  // --- LINK PARSER ---
   const formatMessageContent = (content) => {
     if (!content) return "";
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -279,16 +285,16 @@ const App = () => {
                     <Flame size={40} className="text-white mb-2"/>
                     <div><h2 className="text-3xl font-black">{profile?.streak_count || 1}</h2><p className="text-orange-100 text-xs font-bold uppercase">Day Streak</p></div>
                  </div>
-                 {/* SAFE ADMIN BUTTON (Used Camera Icon) */}
+                 {/* DIRECT JOIN BUTTONS */}
                  {isAdmin ? (
-                    <button onClick={handleShareMeeting} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
+                    <button onClick={handleAdminStartLive} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
                         <Camera size={40} className="text-emerald-400 mb-2"/>
-                        <div><h2 className="text-lg font-bold text-emerald-100">Start Live</h2><p className="text-white/40 text-xs font-bold uppercase">Post Link</p></div>
+                        <div><h2 className="text-lg font-bold text-emerald-100">Start Live</h2><p className="text-white/40 text-xs font-bold uppercase">Open Room</p></div>
                     </button>
                  ) : (
-                    <button onClick={() => setActiveTab('chat')} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
+                    <button onClick={handleJoinLive} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
                         <Camera size={40} className="text-emerald-400 mb-2"/>
-                        <div><h2 className="text-lg font-bold text-emerald-100">Join Live</h2><p className="text-white/40 text-xs font-bold uppercase">Check Chat</p></div>
+                        <div><h2 className="text-lg font-bold text-emerald-100">Join Live</h2><p className="text-white/40 text-xs font-bold uppercase">Enter Room</p></div>
                     </button>
                  )}
              </div>
@@ -350,7 +356,7 @@ const App = () => {
                             <img src={msg.avatar_url || "https://via.placeholder.com/40"} onError={(e) => e.target.src="https://via.placeholder.com/40"} className="w-8 h-8 rounded-full object-cover border border-white/10 shadow-sm bg-gray-600"/>
                             <div className={`relative p-3 rounded-2xl max-w-[80%] text-sm shadow-md ${msg.user_id === session.user.id ? 'bg-indigo-600/90 text-white rounded-tr-none' : 'bg-white/10 backdrop-blur-md text-white/90 rounded-tl-none border border-white/5'}`}>
                                 <p className="text-[10px] font-bold opacity-50 mb-1">{msg.username}</p> 
-                                {/* RESTORED LINK PARSING */}
+                                {/* LINK PARSER */}
                                 <div className="break-words">{formatMessageContent(msg.content)}</div>
                                 {msg.user_id === session.user.id && !msg.pending && <button onClick={() => handleDeleteMessage(msg.id)} className="absolute -left-8 top-2 text-white/20 hover:text-red-400"><Trash2 size={12}/></button>}
                             </div>
