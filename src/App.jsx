@@ -265,6 +265,17 @@ const App = () => {
                 )}
              </div>
 
+             {/* PROFILE CARD - RESTORED! */}
+             <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center relative overflow-hidden shadow-2xl">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+                <div className="relative inline-block group">
+                    {profile?.avatar_url ? <img src={profile.avatar_url} className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-4 border-white/10 shadow-xl group-hover:scale-105 transition duration-500" /> : <div className="w-24 h-24 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center border-4 border-white/10 shadow-xl"><User size={40}/></div>}
+                    <label className="absolute bottom-4 right-0 bg-white text-indigo-900 p-2 rounded-full cursor-pointer hover:bg-indigo-100 transition shadow-lg"><Camera size={14}/><input type="file" accept="image/*" className="hidden" onChange={handleUpdateAvatar}/></label>
+                </div>
+                <button onClick={handleUpdateUsername} className="flex items-center gap-2 mx-auto justify-center opacity-80 hover:opacity-100 transition mb-1"><h3 className="text-xl font-bold tracking-tight">{profile?.username}</h3><Edit3 size={14}/></button>
+                <p className="text-white/40 text-xs font-medium uppercase tracking-widest">Club Member</p>
+             </div>
+
              <div className="grid grid-cols-2 gap-4">
                  <div className="bg-gradient-to-br from-orange-600 to-red-600 rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between shadow-lg shadow-orange-900/30">
                     <Flame size={40} className="text-white mb-2"/>
@@ -278,7 +289,7 @@ const App = () => {
           </div>
         )}
 
-        {/* LIBRARY TAB - FIXED */}
+        {/* LIBRARY TAB */}
         {!isCallActive && activeTab === 'library' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right duration-500">
             <div className="flex justify-between items-end px-2">
