@@ -317,7 +317,6 @@ const App = () => {
                     <label className="absolute bottom-4 right-0 bg-white text-indigo-900 p-2.5 rounded-full cursor-pointer hover:bg-indigo-100 transition shadow-lg"><Camera size={16}/><input type="file" accept="image/*" className="hidden" onChange={handleUpdateAvatar}/></label>
                 </div>
                 <button onClick={handleUpdateUsername} className="flex items-center gap-2 mx-auto justify-center opacity-80 hover:opacity-100 transition mb-1"><h3 className="text-2xl font-bold tracking-tight">{profile?.username}</h3><Edit3 size={16}/></button>
-                <p className="text-white/40 text-sm font-medium uppercase tracking-widest">Marine Engineer</p>
              </div>
 
              {/* ACTION BUTTONS */}
