@@ -278,8 +278,35 @@ const App = () => {
           </div>
         )}
 
-        {/* LIBRARY TAB */}
+        {/* LIBRARY TAB - MOBILE FIXED */}
         {!isCallActive && activeTab === 'library' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-500">
+            <div className="flex justify-between items-end px-2">
+               <div><h2 className="text-3xl font-bold tracking-tight">Library</h2><p className="text-white/40 text-xs font-bold uppercase tracking-widest">{libraryBooks.length} Books</p></div>
+               {isAdmin && <button onClick={() => setShowUploadForm(true)} className="bg-white/10 backdrop-blur-md border border-white/10 text-white px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 transition"><Plus size={16}/> Add</button>}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+               {libraryBooks.map(book => (
+                    <div key={book.id} className="group relative bg-white/5 border border-white/10 rounded-2xl p-3">
+                        {/* Book Cover */}
+                        <div className="aspect-[2/3] bg-black/50 rounded-xl mb-3 relative overflow-hidden shadow-lg">
+                            <img src={book.cover} className="w-full h-full object-cover" />
+                            {isAdmin && <button onClick={(e) => { e.preventDefault(); handleDeleteBook(book.id); }} className="absolute top-2 right-2 bg-red-600/80 text-white p-2 rounded-full z-20"><Trash2 size={14}/></button>}
+                        </div>
+                        
+                        {/* NEW: Buttons are ALWAYS visible below the book */}
+                        <div className="flex flex-col gap-2 mb-3">
+                             <a href={book.pdf_url} target="_blank" className="w-full bg-white/10 hover:bg-white/20 py-2 rounded-lg text-[10px] font-bold uppercase text-center border border-white/5">Open PDF</a>
+                             <button onClick={() => handleStartReading(book)} className="w-full bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg text-[10px] font-bold uppercase flex items-center justify-center gap-1 shadow-lg shadow-indigo-900/20"><Play size={10} fill="white"/> Track</button>
+                        </div>
+
+                        <h3 className="font-bold text-sm line-clamp-1">{book.title}</h3>
+                        <p className="text-xs text-white/40 line-clamp-1">{book.author}</p>
+                    </div>
+               ))}
+            </div>
+          </div>
+        )}
           <div className="space-y-6 animate-in fade-in slide-in-from-right duration-500">
             <div className="flex justify-between items-end px-2">
                <div><h2 className="text-3xl font-bold tracking-tight">Library</h2><p className="text-white/40 text-xs font-bold uppercase tracking-widest">{libraryBooks.length} Books</p></div>
