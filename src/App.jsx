@@ -60,24 +60,28 @@ const App = () => {
   }, []);
 
   const handleProfileLoad = async (userId, userEmail) => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (!data) {
-        const newProfile = { id: userId, email: userEmail, username: "Reader", streak_count: 1, last_seen: new Date() };
-        await supabase.from('profiles').upsert([newProfile]);
-        setProfile(newProfile);
-    } else {
-        const today = new Date().toDateString();
-        const lastSeen = new Date(data.last_seen).toDateString();
-        let newStreak = data.streak_count;
+    try {
+        const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+        if (!data) {
+            const newProfile = { id: userId, email: userEmail, username: "Reader", streak_count: 1, last_seen: new Date() };
+            await supabase.from('profiles').upsert([newProfile]);
+            setProfile(newProfile);
+        } else {
+            const today = new Date().toDateString();
+            const lastSeen = new Date(data.last_seen || new Date()).toDateString();
+            let newStreak = data.streak_count || 1;
 
-        if (today !== lastSeen) {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            if (yesterday.toDateString() === lastSeen) newStreak += 1;
-            else newStreak = 1;
-            await supabase.from('profiles').update({ last_seen: new Date(), streak_count: newStreak }).eq('id', userId);
+            if (today !== lastSeen) {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                if (yesterday.toDateString() === lastSeen) newStreak += 1;
+                else newStreak = 1;
+                await supabase.from('profiles').update({ last_seen: new Date(), streak_count: newStreak }).eq('id', userId);
+            }
+            setProfile({ ...data, streak_count: newStreak });
         }
-        setProfile({ ...data, streak_count: newStreak });
+    } catch (e) {
+        console.error("Profile Error", e);
     }
   };
 
@@ -128,7 +132,7 @@ const App = () => {
   const handleUpdateProgress = async (e) => {
     e.preventDefault();
     const newPage = parseInt(tempPage);
-    if(newPage > profile.total_pages) return showNotification("That's more than the total pages!", 'error');
+    if(newPage > (profile.total_pages || 100)) return showNotification("That's more than the total pages!", 'error');
     setProfile(prev => ({ ...prev, current_page: newPage }));
     await supabase.from('profiles').update({ current_page: newPage }).eq('id', session.user.id);
     setShowProgressModal(false);
@@ -163,27 +167,14 @@ const App = () => {
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- SAFE SHARE MEETING LINK ---
+  // --- SAFE SHARE MEETING LINK (Plain Text Version) ---
   const handleShareMeeting = async () => {
     const link = prompt("Paste your Google Meet or Zoom link here:");
     if (!link) return;
-    if (!link.startsWith('http')) return showNotification("Link must start with http...", 'error');
-    const msgText = `🎥 LIVE SESSION STARTED!\nClick to Join: ${link}`;
+    const msgText = `🎥 LIVE SESSION: ${link}`; // Keeping it simple to prevent crash
     await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url }]);
     setActiveTab('chat');
     showNotification("Meeting link posted!");
-  };
-
-  // --- SAFE URL PARSER ---
-  const formatMessageContent = (content) => {
-    if (!content) return ""; // Crash Prevention Check
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return content.split(urlRegex).map((part, i) => {
-      if (part.match(urlRegex)) {
-        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-indigo-400 font-bold underline break-all">{part}</a>;
-      }
-      return part;
-    });
   };
 
   // Basic CRUD
@@ -246,8 +237,6 @@ const App = () => {
         
         {activeTab === 'dashboard' && (
            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             
-             {/* PROGRESS TRACKER */}
              <div className="bg-black/30 backdrop-blur-xl border border-white/10 rounded-3xl p-6 relative overflow-hidden shadow-2xl">
                 <div className="flex items-start justify-between mb-4">
                     <div><h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-1">Current Read</h3><h2 className="text-xl font-bold leading-tight line-clamp-2">{profile?.current_book_title || "No Book Selected"}</h2></div>
@@ -264,7 +253,6 @@ const App = () => {
                 )}
              </div>
 
-             {/* PROFILE CARD */}
              <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center relative overflow-hidden shadow-2xl">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
                 <div className="relative inline-block group">
@@ -280,7 +268,7 @@ const App = () => {
                     <Flame size={40} className="text-white mb-2"/>
                     <div><h2 className="text-3xl font-black">{profile?.streak_count || 1}</h2><p className="text-orange-100 text-xs font-bold uppercase">Day Streak</p></div>
                  </div>
-                 {/* ADMIN ONLY BUTTON */}
+                 {/* SAFE ADMIN BUTTON (No Video Icon) */}
                  {isAdmin ? (
                     <button onClick={handleShareMeeting} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
                         <Camera size={40} className="text-emerald-400 mb-2"/>
@@ -351,8 +339,8 @@ const App = () => {
                             <img src={msg.avatar_url || "https://via.placeholder.com/40"} onError={(e) => e.target.src="https://via.placeholder.com/40"} className="w-8 h-8 rounded-full object-cover border border-white/10 shadow-sm bg-gray-600"/>
                             <div className={`relative p-3 rounded-2xl max-w-[80%] text-sm shadow-md ${msg.user_id === session.user.id ? 'bg-indigo-600/90 text-white rounded-tr-none' : 'bg-white/10 backdrop-blur-md text-white/90 rounded-tl-none border border-white/5'}`}>
                                 <p className="text-[10px] font-bold opacity-50 mb-1">{msg.username}</p> 
-                                {/* CLICKABLE LINKS HERE */}
-                                <div className="break-words">{formatMessageContent(msg.content)}</div>
+                                {/* SAFE TEXT RENDERING ONLY */}
+                                <div className="break-words">{msg.content || ""}</div>
                                 {msg.user_id === session.user.id && !msg.pending && <button onClick={() => handleDeleteMessage(msg.id)} className="absolute -left-8 top-2 text-white/20 hover:text-red-400"><Trash2 size={12}/></button>}
                             </div>
                         </div>
