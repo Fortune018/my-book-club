@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   Home, BookOpen, Trophy, Plus, X, UploadCloud, 
-  MessageCircle, Mic, MicOff, Camera, CameraOff, PhoneOff, 
-  Lock, User, LogOut, Send, Trash2, Edit3, Pin, Flame, 
-  Smile, CheckCircle, AlertCircle, Sparkles, Zap, Play
+  MessageCircle, Lock, User, LogOut, Send, Trash2, Edit3, Pin, Flame, 
+  Smile, CheckCircle, AlertCircle, Sparkles, Zap, Play, Link as LinkIcon, Video
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -43,8 +42,6 @@ const App = () => {
   const [selectedPdf, setSelectedPdf] = useState(null); 
   const [selectedCover, setSelectedCover] = useState(null);
 
-  // Video State
-  const [isCallActive, setIsCallActive] = useState(false);
   const chatBottomRef = useRef(null);
 
   // --- INITIALIZATION ---
@@ -64,7 +61,6 @@ const App = () => {
 
   const handleProfileLoad = async (userId, userEmail) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    
     if (!data) {
         const newProfile = { id: userId, email: userEmail, username: "Reader", streak_count: 1, last_seen: new Date() };
         await supabase.from('profiles').upsert([newProfile]);
@@ -122,7 +118,6 @@ const App = () => {
   const handleStartReading = async (book) => {
     const total = prompt(`How many pages are in "${book.title}"?`, "100");
     if (!total || isNaN(total)) return;
-    
     const updates = { current_book_title: book.title, current_book_cover: book.cover, current_page: 0, total_pages: parseInt(total) };
     setProfile(prev => ({ ...prev, ...updates }));
     await supabase.from('profiles').update(updates).eq('id', session.user.id);
@@ -134,7 +129,6 @@ const App = () => {
     e.preventDefault();
     const newPage = parseInt(tempPage);
     if(newPage > profile.total_pages) return showNotification("That's more than the total pages!", 'error');
-    
     setProfile(prev => ({ ...prev, current_page: newPage }));
     await supabase.from('profiles').update({ current_page: newPage }).eq('id', session.user.id);
     setShowProgressModal(false);
@@ -167,6 +161,30 @@ const App = () => {
     const newVoters = currentVoters.includes(userId) ? currentVoters.filter(id => id !== userId) : [...currentVoters, userId];
     setLibraryBooks(prev => prev.map(b => b.id === book.id ? {...b, voted_by: newVoters} : b));
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
+  };
+
+  // --- NEW: SHARE MEETING LINK ---
+  const handleShareMeeting = async () => {
+    const link = prompt("Paste your Google Meet or Zoom link here:");
+    if (!link) return;
+    if (!link.startsWith('http')) return showNotification("Link must start with http...", 'error');
+    
+    // Post a special bold message
+    const msgText = `🎥 LIVE SESSION STARTED!\nClick to Join: ${link}`;
+    await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url }]);
+    setActiveTab('chat');
+    showNotification("Meeting link posted to chat!");
+  };
+
+  // --- NEW: URL PARSER ---
+  const formatMessageContent = (content) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return content.split(urlRegex).map((part, i) => {
+      if (part.match(urlRegex)) {
+        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-indigo-400 font-bold underline break-all">{part}</a>;
+      }
+      return part;
+    });
   };
 
   // Basic CRUD
@@ -214,50 +232,32 @@ const App = () => {
       <Background />
       {notification && <div className={`fixed top-20 left-4 right-4 p-4 rounded-2xl flex items-center gap-3 shadow-2xl animate-in slide-in-from-top z-[100] backdrop-blur-md ${notification.type === 'error' ? 'bg-red-500/80' : 'bg-emerald-600/80'}`}>{notification.type === 'error' ? <AlertCircle size={24} /> : <CheckCircle size={24} />}<p className="font-bold text-sm">{notification.message}</p></div>}
 
-      {!isCallActive && (
-        <nav className="fixed top-0 left-0 right-0 z-30 bg-black/20 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="relative">{profile?.avatar_url ? <img src={profile.avatar_url} className="w-10 h-10 rounded-full object-cover border-2 border-indigo-500/50" /> : <div className="bg-indigo-600 p-2 rounded-full"><User size={20} /></div>}<div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-black rounded-full"></div></div>
-            <div><h1 className="text-sm font-bold opacity-60 uppercase tracking-widest">Welcome</h1><h2 className="text-lg font-bold leading-none">{profile?.username || 'Reader'}</h2></div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={handleAdminToggle} className={`p-2 rounded-full transition ${isAdmin ? 'bg-indigo-600 text-white' : 'text-white/30 hover:bg-white/10'}`}><Lock size={18} /></button>
-            <button onClick={handleLogout} className="p-2 rounded-full text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"><LogOut size={18}/></button>
-          </div>
-        </nav>
-      )}
+      <nav className="fixed top-0 left-0 right-0 z-30 bg-black/20 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="relative">{profile?.avatar_url ? <img src={profile.avatar_url} className="w-10 h-10 rounded-full object-cover border-2 border-indigo-500/50" onError={(e) => e.target.src="https://via.placeholder.com/40"} /> : <div className="bg-indigo-600 p-2 rounded-full"><User size={20} /></div>}<div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-black rounded-full"></div></div>
+          <div><h1 className="text-sm font-bold opacity-60 uppercase tracking-widest">Welcome</h1><h2 className="text-lg font-bold leading-none">{profile?.username || 'Reader'}</h2></div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleAdminToggle} className={`p-2 rounded-full transition ${isAdmin ? 'bg-indigo-600 text-white' : 'text-white/30 hover:bg-white/10'}`}><Lock size={18} /></button>
+          <button onClick={handleLogout} className="p-2 rounded-full text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"><LogOut size={18}/></button>
+        </div>
+      </nav>
 
-      <main className={`pt-24 px-4 max-w-lg mx-auto relative z-10 ${isCallActive ? 'p-0 pt-0 max-w-full h-screen' : ''}`}>
+      <main className="pt-24 px-4 max-w-lg mx-auto relative z-10">
         
-        {isCallActive && (
-           <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col animate-in zoom-in duration-300">
-             <div className="bg-black/40 backdrop-blur-md p-4 flex justify-between items-center absolute top-0 w-full z-10"><div className="flex items-center gap-2"><span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span><span className="font-bold text-sm tracking-wider">LIVE SESSION</span></div><button onClick={() => setIsCallActive(false)} className="bg-white/10 hover:bg-red-600 px-4 py-2 rounded-full text-xs font-bold transition backdrop-blur-md border border-white/10">LEAVE ROOM</button></div>
-             <iframe src={`https://meet.jit.si/MindfulReadersClub_${discussionTopic.replace(/[^a-zA-Z0-9]/g, '_')}`} allow="camera; microphone; fullscreen; display-capture; autoplay" className="w-full h-full border-0" title="Video Call"></iframe>
-           </div>
-        )}
-
-        {!isCallActive && activeTab === 'dashboard' && (
+        {activeTab === 'dashboard' && (
            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
              
              {/* PROGRESS TRACKER */}
              <div className="bg-black/30 backdrop-blur-xl border border-white/10 rounded-3xl p-6 relative overflow-hidden shadow-2xl">
                 <div className="flex items-start justify-between mb-4">
-                    <div>
-                        <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-1">Current Read</h3>
-                        <h2 className="text-xl font-bold leading-tight line-clamp-2">{profile?.current_book_title || "No Book Selected"}</h2>
-                    </div>
+                    <div><h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-1">Current Read</h3><h2 className="text-xl font-bold leading-tight line-clamp-2">{profile?.current_book_title || "No Book Selected"}</h2></div>
                     {profile?.current_book_cover && <img src={profile.current_book_cover} className="w-12 h-16 object-cover rounded-md shadow-lg" />}
                 </div>
-                
                 {profile?.current_book_title ? (
                     <div>
-                        <div className="flex justify-between text-xs text-white/60 mb-2">
-                            <span>Page {profile.current_page}</span>
-                            <span>{Math.round((profile.current_page / (profile.total_pages || 1)) * 100)}% Complete</span>
-                        </div>
-                        <div className="h-3 bg-white/10 rounded-full overflow-hidden mb-4">
-                            <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000" style={{width: `${(profile.current_page / (profile.total_pages || 1)) * 100}%`}}></div>
-                        </div>
+                        <div className="flex justify-between text-xs text-white/60 mb-2"><span>Page {profile.current_page}</span><span>{Math.round((profile.current_page / (profile.total_pages || 1)) * 100)}% Complete</span></div>
+                        <div className="h-3 bg-white/10 rounded-full overflow-hidden mb-4"><div className="h-full bg-indigo-500 rounded-full transition-all duration-1000" style={{width: `${(profile.current_page / (profile.total_pages || 1)) * 100}%`}}></div></div>
                         <button onClick={() => { setTempPage(profile.current_page); setShowProgressModal(true); }} className="w-full bg-white/10 hover:bg-white/20 py-3 rounded-xl font-bold text-sm transition">Update Progress</button>
                     </div>
                 ) : (
@@ -265,11 +265,11 @@ const App = () => {
                 )}
              </div>
 
-             {/* PROFILE CARD - RESTORED! */}
+             {/* PROFILE CARD */}
              <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center relative overflow-hidden shadow-2xl">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
                 <div className="relative inline-block group">
-                    {profile?.avatar_url ? <img src={profile.avatar_url} className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-4 border-white/10 shadow-xl group-hover:scale-105 transition duration-500" /> : <div className="w-24 h-24 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center border-4 border-white/10 shadow-xl"><User size={40}/></div>}
+                    {profile?.avatar_url ? <img src={profile.avatar_url} className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-4 border-white/10 shadow-xl" onError={(e) => e.target.src="https://via.placeholder.com/100"} /> : <div className="w-24 h-24 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center border-4 border-white/10 shadow-xl"><User size={40}/></div>}
                     <label className="absolute bottom-4 right-0 bg-white text-indigo-900 p-2 rounded-full cursor-pointer hover:bg-indigo-100 transition shadow-lg"><Camera size={14}/><input type="file" accept="image/*" className="hidden" onChange={handleUpdateAvatar}/></label>
                 </div>
                 <button onClick={handleUpdateUsername} className="flex items-center gap-2 mx-auto justify-center opacity-80 hover:opacity-100 transition mb-1"><h3 className="text-xl font-bold tracking-tight">{profile?.username}</h3><Edit3 size={14}/></button>
@@ -281,16 +281,24 @@ const App = () => {
                     <Flame size={40} className="text-white mb-2"/>
                     <div><h2 className="text-3xl font-black">{profile?.streak_count || 1}</h2><p className="text-orange-100 text-xs font-bold uppercase">Day Streak</p></div>
                  </div>
-                 <button onClick={() => setIsCallActive(true)} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
-                    <Camera size={40} className="text-emerald-400 mb-2"/>
-                    <div><h2 className="text-lg font-bold text-emerald-100">Go Live</h2><p className="text-white/40 text-xs font-bold uppercase">Join Room</p></div>
-                 </button>
+                 {/* ADMIN ONLY BUTTON */}
+                 {isAdmin ? (
+                    <button onClick={handleShareMeeting} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
+                        <Video size={40} className="text-emerald-400 mb-2"/>
+                        <div><h2 className="text-lg font-bold text-emerald-100">Start Live</h2><p className="text-white/40 text-xs font-bold uppercase">Post Link</p></div>
+                    </button>
+                 ) : (
+                    <button onClick={() => setActiveTab('chat')} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
+                        <Video size={40} className="text-emerald-400 mb-2"/>
+                        <div><h2 className="text-lg font-bold text-emerald-100">Join Live</h2><p className="text-white/40 text-xs font-bold uppercase">Check Chat</p></div>
+                    </button>
+                 )}
              </div>
           </div>
         )}
 
         {/* LIBRARY TAB */}
-        {!isCallActive && activeTab === 'library' && (
+        {activeTab === 'library' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right duration-500">
             <div className="flex justify-between items-end px-2">
                <div><h2 className="text-3xl font-bold tracking-tight">Library</h2><p className="text-white/40 text-xs font-bold uppercase tracking-widest">{libraryBooks.length} Books</p></div>
@@ -303,13 +311,10 @@ const App = () => {
                             <img src={book.cover} className="w-full h-full object-cover" />
                             {isAdmin && <button onClick={(e) => { e.preventDefault(); handleDeleteBook(book.id); }} className="absolute top-2 right-2 bg-red-600/80 text-white p-2 rounded-full z-20"><Trash2 size={14}/></button>}
                         </div>
-                        
-                        {/* BUTTONS ALWAYS VISIBLE */}
                         <div className="flex flex-col gap-2 mb-3">
                              <a href={book.pdf_url} target="_blank" className="w-full bg-white/10 hover:bg-white/20 py-2 rounded-lg text-[10px] font-bold uppercase text-center border border-white/5">Open PDF</a>
                              <button onClick={() => handleStartReading(book)} className="w-full bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg text-[10px] font-bold uppercase flex items-center justify-center gap-1 shadow-lg shadow-indigo-900/20"><Play size={10} fill="white"/> Track</button>
                         </div>
-
                         <h3 className="font-bold text-sm line-clamp-1">{book.title}</h3>
                         <p className="text-xs text-white/40 line-clamp-1">{book.author}</p>
                     </div>
@@ -318,7 +323,7 @@ const App = () => {
           </div>
         )}
 
-        {!isCallActive && activeTab === 'vote' && (
+        {activeTab === 'vote' && (
             <div className="space-y-6 animate-in slide-in-from-right duration-500">
                 <h2 className="text-3xl font-bold px-2">Top Picks</h2>
                 <div className="space-y-3">
@@ -334,7 +339,7 @@ const App = () => {
             </div>
         )}
 
-        {!isCallActive && activeTab === 'chat' && (
+        {activeTab === 'chat' && (
             <div className="flex flex-col h-[80vh] animate-in slide-in-from-bottom duration-500">
                 <div className="bg-indigo-950/40 backdrop-blur-xl border border-indigo-500/20 p-4 rounded-2xl mb-4 relative shadow-lg">
                    <div className="flex items-center gap-2 mb-1"><Sparkles size={12} className="text-indigo-400"/><span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Live Discussion</span></div>
@@ -344,9 +349,11 @@ const App = () => {
                 <div className="flex-1 space-y-4 overflow-y-auto mb-4 scrollbar-hide px-1 pb-4">
                     {chatMessages.map(msg => (
                         <div key={msg.id} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 ${msg.user_id === session.user.id ? 'flex-row-reverse' : ''}`}>
-                            <img src={msg.avatar_url || "https://via.placeholder.com/30"} className="w-8 h-8 rounded-full object-cover border border-white/10 shadow-sm"/>
+                            <img src={msg.avatar_url || "https://via.placeholder.com/40"} onError={(e) => e.target.src="https://via.placeholder.com/40"} className="w-8 h-8 rounded-full object-cover border border-white/10 shadow-sm bg-gray-600"/>
                             <div className={`relative p-3 rounded-2xl max-w-[80%] text-sm shadow-md ${msg.user_id === session.user.id ? 'bg-indigo-600/90 text-white rounded-tr-none' : 'bg-white/10 backdrop-blur-md text-white/90 rounded-tl-none border border-white/5'}`}>
-                                <p className="text-[10px] font-bold opacity-50 mb-1">{msg.username}</p> {msg.content}
+                                <p className="text-[10px] font-bold opacity-50 mb-1">{msg.username}</p> 
+                                {/* CLICKABLE LINKS HERE */}
+                                <div className="break-words">{formatMessageContent(msg.content)}</div>
                                 {msg.user_id === session.user.id && !msg.pending && <button onClick={() => handleDeleteMessage(msg.id)} className="absolute -left-8 top-2 text-white/20 hover:text-red-400"><Trash2 size={12}/></button>}
                             </div>
                         </div>
@@ -362,16 +369,14 @@ const App = () => {
             </div>
         )}
 
-        {!isCallActive && (
-          <div className="fixed bottom-6 left-6 right-6 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-full flex justify-around p-3 z-30 shadow-2xl">
+        <div className="fixed bottom-6 left-6 right-6 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-full flex justify-around p-3 z-30 shadow-2xl">
             {[{ id: 'dashboard', icon: Home, label: 'Home' }, { id: 'library', icon: BookOpen, label: 'Library' }, { id: 'vote', icon: Trophy, label: 'Vote' }, { id: 'chat', icon: MessageCircle, label: 'Chat' }].map((tab) => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ${activeTab === tab.id ? 'bg-white text-black font-bold shadow-lg' : 'text-white/50 hover:text-white hover:bg-white/10'}`}>
                 <tab.icon size={20} />
                 {activeTab === tab.id && <span className="text-xs">{tab.label}</span>}
               </button>
             ))}
-          </div>
-        )}
+        </div>
 
         {/* MODALS */}
         {showProgressModal && (
