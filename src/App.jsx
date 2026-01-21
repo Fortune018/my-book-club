@@ -217,7 +217,10 @@ const App = () => {
   const handleUpdateAvatar = async (e) => {
     const file = e.target.files[0]; if(!file) return;
     const objectUrl = URL.createObjectURL(file); setProfile(prev => ({...prev, avatar_url: objectUrl})); setIsUploading(true);
-    try { const fileName = `avatar-${Date.now()}-${session.user.id}`; await supabase.storage.from('book-files').upload(fileName, file);
+    // NEW CORRECT CODE
+const fileName = `avatar-${Date.now()}-${session.user.id}`;
+await supabase.storage.from('avatars').upload(fileName, file);  // <--- Change this
+const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName); // <--- And thise.storage.from('book-files').upload(fileName, file);
     const { data: { publicUrl } } = supabase.storage.from('book-files').getPublicUrl(fileName);
     await supabase.from('profiles').upsert({ id: session.user.id, avatar_url: publicUrl }); showNotification("Pic Updated!"); } catch(e){showNotification("Failed","error")} finally {setIsUploading(false);}
   };
