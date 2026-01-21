@@ -214,7 +214,36 @@ const App = () => {
   };
 
   // Basic CRUD
-  const handleUpdateAvatar = async (e) => {
+const handleUpdateAvatar = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // 1. Preview the image immediately
+    const objectUrl = URL.createObjectURL(file);
+    setProfile((prev) => ({ ...prev, avatar_url: objectUrl }));
+
+    try {
+      const fileName = `avatar-${Date.now()}-${session.user.id}`;
+
+      // 2. Upload to the correct 'avatars' bucket
+      await supabase.storage.from('avatars').upload(fileName, file);
+
+      // 3. Get the new public URL
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
+
+      // 4. Update the database profile
+      await supabase.from('profiles').upsert({
+        id: session.user.id,
+        avatar_url: publicUrl
+      });
+
+      showNotification("Profile picture updated!", "success");
+
+    } catch (error) {
+      console.error("Error uploading avatar:", error);
+      showNotification("Error updating profile", "error");
+    }
+  };
     const file = e.target.files[0]; if(!file) return;
     const objectUrl = URL.createObjectURL(file); setProfile(prev => ({...prev, avatar_url: objectUrl})); setIsUploading(true);
     // NEW CORRECT CODE
