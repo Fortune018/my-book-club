@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   Home, BookOpen, Trophy, Plus, X, UploadCloud, 
   MessageCircle, Lock, User, LogOut, Send, Trash2, Edit3, Pin, Flame, 
-  Smile, CheckCircle, AlertCircle, Sparkles, Zap, Play, Camera, Video,
-  Save, Maximize2
+  Smile, CheckCircle, AlertCircle, Sparkles, Play, Camera, 
+  Save, Layout, Menu
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -13,8 +13,6 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ADMIN_PIN = "2026"; 
-
-// 🚨 PASTE YOUR REAL WHEREBY LINK HERE 🚨
 const PERMANENT_MEETING_LINK = "https://whereby.com/mindful-readers"; 
 
 const App = () => {
@@ -28,17 +26,22 @@ const App = () => {
   const [notification, setNotification] = useState(null); 
   const [activeTab, setActiveTab] = useState('dashboard'); 
   const [isAdmin, setIsAdmin] = useState(false);
+  
+  // Data States
   const [libraryBooks, setLibraryBooks] = useState([]); 
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [discussionTopic, setDiscussionTopic] = useState("Introduction");
+  
+  // UI States
   const [showEmoji, setShowEmoji] = useState(false);
   const [isUploading, setIsUploading] = useState(false); 
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false); // For mobile toggle
   
   // Profile & Image View States
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [viewImage, setViewImage] = useState(null); // URL of image to view full screen
+  const [viewImage, setViewImage] = useState(null); // The URL of the image to show BOLD
   const [tempAbout, setTempAbout] = useState("");
   const [tempGoal, setTempGoal] = useState("");
   
@@ -65,7 +68,6 @@ const App = () => {
       setSession(session);
       if (session) handleProfileLoad(session.user.id, session.user.email);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
@@ -73,28 +75,16 @@ const App = () => {
     try {
         const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
         if (!data) {
-            const newProfile = { 
-                id: userId, 
-                email: userEmail, 
-                username: "Reader", 
-                streak_count: 1, 
-                last_seen: new Date(),
-                about: "I am a mindful reader.",
-                joining_goal: "To read more books."
-            };
+            const newProfile = { id: userId, email: userEmail, username: "Reader", streak_count: 1, last_seen: new Date(), about: "I am a mindful reader.", joining_goal: "To read more books." };
             await supabase.from('profiles').upsert([newProfile]);
             setProfile(newProfile);
         } else {
-            // Update Streak Logic
             const today = new Date().toDateString();
             const lastSeen = new Date(data.last_seen || new Date()).toDateString();
             let newStreak = data.streak_count || 1;
-
             if (today !== lastSeen) {
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                if (yesterday.toDateString() === lastSeen) newStreak += 1;
-                else newStreak = 1;
+                const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+                if (yesterday.toDateString() === lastSeen) newStreak += 1; else newStreak = 1;
                 await supabase.from('profiles').update({ last_seen: new Date(), streak_count: newStreak }).eq('id', userId);
             }
             setProfile({ ...data, streak_count: newStreak });
@@ -108,15 +98,10 @@ const App = () => {
     if (session) {
       fetchBooks();
       fetchMessages();
-      const channel = supabase.channel('public:messages')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => { 
-            if(payload.eventType === 'UPDATE') {
-                setChatMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new : m));
-            } else if (payload.eventType === 'INSERT') {
-                setChatMessages(prev => { if (prev.find(m => m.id === payload.new.id)) return prev; return [...prev, payload.new]; }); 
-            } else if (payload.eventType === 'DELETE') {
-                setChatMessages(prev => prev.filter(m => m.id !== payload.old.id));
-            }
+      const channel = supabase.channel('public:messages').on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => { 
+            if(payload.eventType === 'UPDATE') setChatMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new : m));
+            else if (payload.eventType === 'INSERT') setChatMessages(prev => { if (prev.find(m => m.id === payload.new.id)) return prev; return [...prev, payload.new]; }); 
+            else if (payload.eventType === 'DELETE') setChatMessages(prev => prev.filter(m => m.id !== payload.old.id));
         }).subscribe();
       return () => supabase.removeChannel(channel);
     }
@@ -160,7 +145,7 @@ const App = () => {
   const handleUpdateProgress = async (e) => {
     e.preventDefault();
     const newPage = parseInt(tempPage);
-    if(newPage > (profile.total_pages || 100)) return showNotification("That's more than the total pages!", 'error');
+    if(newPage > (profile.total_pages || 100)) return showNotification("Page number too high!", 'error');
     setProfile(prev => ({ ...prev, current_page: newPage }));
     await supabase.from('profiles').update({ current_page: newPage }).eq('id', session.user.id);
     setShowProgressModal(false);
@@ -170,21 +155,12 @@ const App = () => {
   const handleSaveProfile = async () => {
     setIsUploading(true);
     try {
-        const updates = { 
-            about: tempAbout, 
-            joining_goal: tempGoal,
-            username: profile.username // Persist username edits if any
-        };
-        
+        const updates = { about: tempAbout, joining_goal: tempGoal, username: profile.username };
         await supabase.from('profiles').update(updates).eq('id', session.user.id);
         setProfile(prev => ({ ...prev, ...updates }));
         setIsEditingProfile(false);
         showNotification("Profile Updated Successfully!");
-    } catch(e) {
-        showNotification("Failed to update profile", "error");
-    } finally {
-        setIsUploading(false);
-    }
+    } catch(e) { showNotification("Failed to update profile", "error"); } finally { setIsUploading(false); }
   };
 
   const handleUploadBook = async (e) => {
@@ -215,20 +191,16 @@ const App = () => {
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  // --- JOIN LIVE ---
-  const handleJoinLive = () => { window.open(PERMANENT_MEETING_LINK, '_blank'); };
   const handleAdminStartLive = async () => {
-    const msgText = `🎥 We are starting LIVE now! Click the 'Join Live' button on the dashboard to enter.`;
+    const msgText = `🎥 We are starting LIVE now! Click the 'Join Live' button on the dashboard.`;
     await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url, is_pinned: true }]);
     window.open(PERMANENT_MEETING_LINK, '_blank');
   };
 
-  // --- PINNING LOGIC ---
   const handlePinMessage = async (msg) => {
       const newStatus = !msg.is_pinned;
       setChatMessages(prev => prev.map(m => m.id === msg.id ? { ...m, is_pinned: newStatus } : m));
       await supabase.from('messages').update({ is_pinned: newStatus }).eq('id', msg.id);
-      showNotification(newStatus ? "Message Pinned!" : "Message Unpinned");
   };
   const pinnedMessage = chatMessages.find(m => m.is_pinned);
 
@@ -241,7 +213,6 @@ const App = () => {
     });
   };
 
-  // --- BASIC CRUD ---
   const handleUpdateAvatar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -263,23 +234,20 @@ const App = () => {
   async function fetchMessages() { const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true }); setChatMessages(data || []); }
   const handleAdminToggle = () => { if (isAdmin) setIsAdmin(false); else if (window.prompt("Admin PIN:") === ADMIN_PIN) { setIsAdmin(true); showNotification("Admin Active"); }};
 
-  // --- COMPONENTS ---
-  const Background = () => ( <div className="fixed inset-0 z-0"><div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=2670&auto=format&fit=crop')] bg-cover bg-center opacity-40"></div><div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-indigo-950/80 to-black"></div></div> );
-
+  // --- LOGIN SCREEN (Unchanged) ---
   if (!session) {
     return (
-      <div className="min-h-screen text-white flex items-center justify-center p-6 relative overflow-hidden font-sans">
-        <Background />
-        {notification && <div className="fixed top-6 left-6 right-6 p-4 rounded-xl bg-emerald-500/90 backdrop-blur-md text-white font-bold text-center z-50 animate-in slide-in-from-top">{notification.message}</div>}
-        <div className="w-full max-w-sm relative z-10 bg-black/30 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl">
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-6 relative overflow-hidden font-sans">
+        {notification && <div className="fixed top-6 left-0 right-0 text-center z-50"><span className="bg-emerald-500 px-6 py-2 rounded-full font-bold shadow-lg">{notification.message}</span></div>}
+        <div className="w-full max-w-sm relative z-10 bg-black/40 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl">
            <div className="flex justify-center mb-6"><div className="bg-indigo-600 p-4 rounded-2xl shadow-lg"><BookOpen size={40} className="text-white" /></div></div>
-           <h1 className="text-4xl font-black text-center mb-2">Mindful<span className="text-indigo-400">Readers</span></h1>
-           <p className="text-center text-white/50 mb-8 font-medium">Your Sanctuary for Knowledge</p>
+           <h1 className="text-3xl font-black text-center mb-2">Mindful<span className="text-indigo-400">Readers</span></h1>
+           <p className="text-center text-white/50 mb-8 font-medium">Join the Community</p>
            <form onSubmit={handleAuth} className="space-y-4">
-              {authMode === 'signup' && <input type="text" placeholder="Choose a Username" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none transition text-white" required />}
-              <input type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none transition text-white" required />
-              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none transition text-white" required />
-              <button disabled={isUploading} className="w-full bg-indigo-600 font-bold py-4 rounded-xl hover:scale-[1.02] transition shadow-lg shadow-indigo-900/50">{isUploading ? "Connecting..." : (authMode === 'login' ? "Enter Sanctuary" : "Join Club")}</button>
+              {authMode === 'signup' && <input type="text" placeholder="Choose a Username" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none text-white" required />}
+              <input type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none text-white" required />
+              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none text-white" required />
+              <button disabled={isUploading} className="w-full bg-indigo-600 font-bold py-4 rounded-xl hover:scale-[1.02] transition shadow-lg">{isUploading ? "Connecting..." : (authMode === 'login' ? "Enter Sanctuary" : "Join Club")}</button>
            </form>
            <div className="mt-8 text-center text-sm text-white/40"><button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-indigo-400 font-bold hover:text-white transition">{authMode === 'login' ? "Create Account" : "Sign In"}</button></div>
         </div>
@@ -287,269 +255,299 @@ const App = () => {
     );
   }
 
+  // --- APP LAYOUT ---
   return (
-    <div className="min-h-screen font-sans pb-28 text-white relative overflow-hidden">
-      <Background />
-      {notification && <div className={`fixed top-20 left-4 right-4 p-4 rounded-2xl flex items-center gap-3 shadow-2xl animate-in slide-in-from-top z-[100] backdrop-blur-md ${notification.type === 'error' ? 'bg-red-500/80' : 'bg-emerald-600/80'}`}>{notification.type === 'error' ? <AlertCircle size={24} /> : <CheckCircle size={24} />}<p className="font-bold text-sm">{notification.message}</p></div>}
+    <div className="min-h-screen bg-[#0f1115] text-white font-sans flex overflow-hidden">
+      
+      {/* --- SIDEBAR (THE MENU BY THE SIDE) --- */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#1a1d23] border-r border-white/5 transform transition-transform duration-300 ease-in-out ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0`}>
+        <div className="p-6 flex flex-col h-full">
+            {/* Logo */}
+            <div className="flex items-center gap-3 mb-10">
+                <div className="bg-indigo-600 p-2 rounded-xl"><BookOpen size={24} className="text-white"/></div>
+                <h1 className="text-xl font-bold">Mindful<span className="text-indigo-400">Readers</span></h1>
+            </div>
 
-      <nav className="fixed top-0 left-0 right-0 z-30 bg-black/20 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition" onClick={() => setActiveTab('profile')}>
-          <div className="relative">{profile?.avatar_url ? <img src={profile.avatar_url} className="w-10 h-10 rounded-full object-cover border-2 border-indigo-500/50" onError={(e) => e.target.src="https://via.placeholder.com/40"} /> : <div className="bg-indigo-600 p-2 rounded-full"><User size={20} /></div>}<div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-black rounded-full"></div></div>
-          <div><h1 className="text-sm font-bold opacity-60 uppercase tracking-widest">Welcome</h1><h2 className="text-lg font-bold leading-none">{profile?.username || 'Reader'}</h2></div>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={handleAdminToggle} className={`p-2 rounded-full transition ${isAdmin ? 'bg-indigo-600 text-white' : 'text-white/30 hover:bg-white/10'}`}><Lock size={18} /></button>
-          <button onClick={handleLogout} className="p-2 rounded-full text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"><LogOut size={18}/></button>
-        </div>
-      </nav>
+            {/* User Mini Profile */}
+            <div className="mb-8 p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center gap-3 hover:bg-white/10 transition cursor-pointer" onClick={() => setActiveTab('profile')}>
+                 <img src={profile?.avatar_url || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover border border-indigo-500/50" />
+                 <div className="overflow-hidden">
+                     <h3 className="font-bold text-sm truncate">{profile?.username || "Reader"}</h3>
+                     <p className="text-xs text-white/40">View Profile</p>
+                 </div>
+            </div>
 
-      <main className="pt-24 px-4 max-w-lg mx-auto relative z-10">
+            {/* Navigation Links */}
+            <nav className="space-y-2 flex-1">
+                {[
+                    { id: 'dashboard', icon: Layout, label: 'Dashboard' },
+                    { id: 'profile', icon: User, label: 'My Profile' },
+                    { id: 'library', icon: BookOpen, label: 'Library' },
+                    { id: 'vote', icon: Trophy, label: 'Vote' },
+                    { id: 'chat', icon: MessageCircle, label: 'Chat Room' }
+                ].map((item) => (
+                    <button key={item.id} onClick={() => { setActiveTab(item.id); setShowMobileMenu(false); }} 
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}>
+                        <item.icon size={20} />
+                        <span className="font-medium text-sm">{item.label}</span>
+                    </button>
+                ))}
+            </nav>
+
+            {/* Admin & Logout */}
+            <div className="border-t border-white/5 pt-4 space-y-2">
+                <button onClick={handleAdminToggle} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${isAdmin ? 'text-indigo-400 bg-indigo-500/10' : 'text-white/30 hover:text-white'}`}>
+                    <Lock size={18} /> <span className="text-sm">Admin Mode</span>
+                </button>
+                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400/50 hover:bg-red-500/10 hover:text-red-400 transition">
+                    <LogOut size={18} /> <span className="text-sm">Log Out</span>
+                </button>
+            </div>
+        </div>
+      </aside>
+
+      {/* --- MAIN CONTENT AREA --- */}
+      <main className="flex-1 h-screen overflow-y-auto relative scrollbar-hide">
         
-        {/* --- PROFILE TAB --- */}
-        {activeTab === 'profile' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 relative overflow-hidden shadow-2xl">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold">My Profile</h2>
-                        <button onClick={() => { setIsEditingProfile(!isEditingProfile); }} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition ${isEditingProfile ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'}`}>
-                            {isEditingProfile ? <Save size={16}/> : <Edit3 size={16}/>}
-                            {isEditingProfile ? "Save Changes" : "Edit Profile"}
-                        </button>
-                    </div>
+        {/* Mobile Header (Hamburger) */}
+        <div className="md:hidden sticky top-0 z-30 bg-[#0f1115]/80 backdrop-blur-md p-4 flex justify-between items-center border-b border-white/5">
+            <div className="flex items-center gap-2">
+                <div className="bg-indigo-600 p-1.5 rounded-lg"><BookOpen size={18}/></div>
+                <h1 className="font-bold">Mindful</h1>
+            </div>
+            <button onClick={() => setShowMobileMenu(!showMobileMenu)} className="p-2 text-white"><Menu size={24}/></button>
+        </div>
 
-                    {/* AVATAR SECTION */}
-                    <div className="flex flex-col items-center mb-8">
-                        <div className="relative group">
-                            {profile?.avatar_url ? 
+        {notification && <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'}`}>
+            {notification.type === 'error' ? <AlertCircle size={20}/> : <CheckCircle size={20}/>}
+            <span className="font-bold text-sm">{notification.message}</span>
+        </div>}
+
+        <div className="p-6 max-w-4xl mx-auto pb-20">
+            
+            {/* PROFILE TAB (Redesigned) */}
+            {activeTab === 'profile' && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* Header Image / Banner */}
+                    <div className="h-48 bg-gradient-to-r from-indigo-900 to-purple-900 rounded-3xl mb-12 relative shadow-lg">
+                        {/* THE BIG PROFILE PICTURE INTERACTION */}
+                        <div className="absolute -bottom-10 left-8">
+                            <div className="relative group">
                                 <img 
-                                    src={profile.avatar_url} 
-                                    onClick={() => setViewImage(profile.avatar_url)} 
-                                    className="w-32 h-32 rounded-full object-cover border-4 border-white/10 shadow-2xl cursor-pointer hover:scale-105 transition"
-                                /> : 
-                                <div className="w-32 h-32 bg-indigo-600 rounded-full flex items-center justify-center border-4 border-white/10"><User size={64}/></div>
-                            }
-                            {/* Camera Icon only shows in Edit Mode */}
-                            {isEditingProfile && (
-                                <label className="absolute bottom-0 right-0 bg-indigo-600 text-white p-3 rounded-full cursor-pointer hover:bg-indigo-500 shadow-lg transition">
-                                    <Camera size={20}/>
-                                    <input type="file" accept="image/*" className="hidden" onChange={handleUpdateAvatar}/>
-                                </label>
-                            )}
+                                    src={profile?.avatar_url || "https://via.placeholder.com/150"} 
+                                    onClick={() => setViewImage(profile.avatar_url)} // CLICK TO VIEW BOLD
+                                    className="w-32 h-32 rounded-full border-4 border-[#0f1115] object-cover shadow-2xl cursor-pointer transition transform hover:scale-105"
+                                />
+                                {/* Quick Edit Icon on Hover */}
+                                <button onClick={() => setIsEditingProfile(true)} className="absolute bottom-2 right-0 bg-indigo-600 text-white p-2 rounded-full shadow-lg hover:bg-indigo-500 transition border-2 border-[#0f1115]">
+                                    <Edit3 size={16}/>
+                                </button>
+                            </div>
                         </div>
-                        {isEditingProfile ? (
-                            <input type="text" value={profile.username} onChange={(e) => setProfile(p => ({...p, username: e.target.value}))} className="mt-4 bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-center text-xl font-bold w-full max-w-xs focus:outline-none focus:border-indigo-500" />
-                        ) : (
-                            <h2 className="mt-4 text-2xl font-bold">{profile?.username}</h2>
-                        )}
-                        <p className="text-white/40 text-sm uppercase tracking-widest mt-1">Club Member</p>
                     </div>
 
-                    {/* DETAILS SECTION */}
-                    <div className="space-y-4">
-                        <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
-                            <h3 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2"><User size={12}/> About Me</h3>
+                    <div className="mt-4 px-2 mb-8">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h2 className="text-3xl font-bold">{profile?.username || "Reader"}</h2>
+                                <p className="text-white/50 text-sm">Joined 2026 • {profile?.streak_count || 0} Day Streak 🔥</p>
+                            </div>
+                            {isEditingProfile && <button onClick={handleSaveProfile} className="bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded-full font-bold shadow-lg transition flex items-center gap-2"><Save size={16}/> Save Profile</button>}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* About Section */}
+                        <div className="bg-[#1a1d23] border border-white/5 p-6 rounded-3xl">
+                            <h3 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2"><User size={14}/> About Me</h3>
                             {isEditingProfile ? (
-                                <textarea value={tempAbout} onChange={(e) => setTempAbout(e.target.value)} className="w-full bg-white/5 rounded-xl p-3 text-sm text-white focus:outline-none border border-white/10 h-24 resize-none" placeholder="Tell us about yourself..."/>
+                                <textarea value={tempAbout} onChange={e => setTempAbout(e.target.value)} className="w-full bg-black/20 rounded-xl p-4 text-white border border-white/10 h-32 focus:outline-none focus:border-indigo-500" placeholder="Tell the club about yourself..."></textarea>
                             ) : (
-                                <p className="text-white/80 text-sm leading-relaxed">{profile?.about || "No bio yet."}</p>
+                                <p className="text-white/80 leading-relaxed whitespace-pre-wrap">{profile?.about || "I am a mindful reader."}</p>
                             )}
                         </div>
 
-                        <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
-                            <h3 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2"><Trophy size={12}/> My Goal</h3>
+                        {/* Goals Section */}
+                        <div className="bg-[#1a1d23] border border-white/5 p-6 rounded-3xl">
+                            <h3 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2"><Trophy size={14}/> Reading Goals</h3>
                             {isEditingProfile ? (
-                                <textarea value={tempGoal} onChange={(e) => setTempGoal(e.target.value)} className="w-full bg-white/5 rounded-xl p-3 text-sm text-white focus:outline-none border border-white/10 h-24 resize-none" placeholder="What is your reading goal?"/>
+                                <textarea value={tempGoal} onChange={e => setTempGoal(e.target.value)} className="w-full bg-black/20 rounded-xl p-4 text-white border border-white/10 h-32 focus:outline-none focus:border-emerald-500" placeholder="What do you want to achieve?"></textarea>
                             ) : (
-                                <p className="text-white/80 text-sm leading-relaxed">{profile?.joining_goal || "No goal set."}</p>
+                                <p className="text-white/80 leading-relaxed whitespace-pre-wrap">{profile?.joining_goal || "To read more books this year."}</p>
                             )}
                         </div>
                     </div>
                     
+                    {/* Image Upload Area only visible when editing */}
                     {isEditingProfile && (
-                        <button onClick={handleSaveProfile} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 py-4 rounded-xl font-bold text-white shadow-lg shadow-indigo-900/40 transition">Save Profile</button>
+                        <div className="mt-6 bg-[#1a1d23] border border-white/5 p-6 rounded-3xl">
+                            <h3 className="text-white/50 text-xs font-bold uppercase mb-4">Update Profile Picture</h3>
+                            <input type="file" accept="image/*" onChange={handleUpdateAvatar} className="w-full text-sm text-white/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500"/>
+                        </div>
                     )}
                 </div>
-            </div>
-        )}
+            )}
 
-        {/* --- DASHBOARD TAB --- */}
-        {activeTab === 'dashboard' && (
-           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="bg-black/30 backdrop-blur-xl border border-white/10 rounded-3xl p-6 relative overflow-hidden shadow-2xl">
-                <div className="flex items-start justify-between mb-4">
-                    <div><h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-1">Current Read</h3><h2 className="text-xl font-bold leading-tight line-clamp-2">{profile?.current_book_title || "No Book Selected"}</h2></div>
-                    {profile?.current_book_cover && <img src={profile.current_book_cover} className="w-12 h-16 object-cover rounded-md shadow-lg" />}
-                </div>
-                {profile?.current_book_title ? (
-                    <div>
-                        <div className="flex justify-between text-xs text-white/60 mb-2"><span>Page {profile.current_page}</span><span>{Math.round((profile.current_page / (profile.total_pages || 1)) * 100)}% Complete</span></div>
-                        <div className="h-3 bg-white/10 rounded-full overflow-hidden mb-4"><div className="h-full bg-indigo-500 rounded-full transition-all duration-1000" style={{width: `${(profile.current_page / (profile.total_pages || 1)) * 100}%`}}></div></div>
-                        <button onClick={() => { setTempPage(profile.current_page); setShowProgressModal(true); }} className="w-full bg-white/10 hover:bg-white/20 py-3 rounded-xl font-bold text-sm transition">Update Progress</button>
-                    </div>
-                ) : (
-                    <button onClick={() => setActiveTab('library')} className="w-full bg-indigo-600/20 text-indigo-300 py-3 rounded-xl font-bold text-sm border border-indigo-500/30 hover:bg-indigo-600 hover:text-white transition">Browse Library to Start</button>
-                )}
-             </div>
-             
-             {/* Shortcut to Profile */}
-             <div onClick={() => setActiveTab('profile')} className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center relative overflow-hidden shadow-2xl cursor-pointer hover:bg-white/10 transition group">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-                {profile?.avatar_url ? <img src={profile.avatar_url} className="w-20 h-20 rounded-full object-cover mx-auto mb-4 border-4 border-white/10 shadow-xl group-hover:scale-105 transition" /> : <div className="w-20 h-20 bg-indigo-600 rounded-full mx-auto mb-4 flex items-center justify-center border-4 border-white/10 shadow-xl"><User size={30}/></div>}
-                <h3 className="text-xl font-bold tracking-tight">{profile?.username}</h3>
-                <p className="text-white/40 text-xs font-medium uppercase tracking-widest">View Profile</p>
-             </div>
-
-             <div className="grid grid-cols-2 gap-4">
-                 <div className="bg-gradient-to-br from-orange-600 to-red-600 rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between shadow-lg shadow-orange-900/30">
-                    <Flame size={40} className="text-white mb-2"/>
-                    <div><h2 className="text-3xl font-black">{profile?.streak_count || 1}</h2><p className="text-orange-100 text-xs font-bold uppercase">Day Streak</p></div>
-                 </div>
-                 {/* DIRECT JOIN BUTTONS */}
-                 {isAdmin ? (
-                    <button onClick={handleAdminStartLive} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
-                        <Camera size={40} className="text-emerald-400 mb-2"/>
-                        <div><h2 className="text-lg font-bold text-emerald-100">Start Live</h2><p className="text-white/40 text-xs font-bold uppercase">Open Room</p></div>
-                    </button>
-                 ) : (
-                    <button onClick={handleJoinLive} className="bg-emerald-800/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 hover:bg-emerald-600/60 transition flex flex-col justify-between">
-                        <Camera size={40} className="text-emerald-400 mb-2"/>
-                        <div><h2 className="text-lg font-bold text-emerald-100">Join Live</h2><p className="text-white/40 text-xs font-bold uppercase">Enter Room</p></div>
-                    </button>
-                 )}
-             </div>
-          </div>
-        )}
-
-        {/* LIBRARY TAB */}
-        {activeTab === 'library' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-500">
-            <div className="flex justify-between items-end px-2">
-               <div><h2 className="text-3xl font-bold tracking-tight">Library</h2><p className="text-white/40 text-xs font-bold uppercase tracking-widest">{libraryBooks.length} Books</p></div>
-               {isAdmin && <button onClick={() => setShowUploadForm(true)} className="bg-white/10 backdrop-blur-md border border-white/10 text-white px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 transition"><Plus size={16}/> Add</button>}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-               {libraryBooks.map(book => (
-                    <div key={book.id} className="group relative bg-white/5 border border-white/10 rounded-2xl p-3 hover:bg-white/10 transition">
-                        <div className="aspect-[2/3] bg-black/50 rounded-xl mb-3 relative overflow-hidden shadow-lg">
-                            <img src={book.cover} className="w-full h-full object-cover" />
-                            {isAdmin && <button onClick={(e) => { e.preventDefault(); handleDeleteBook(book.id); }} className="absolute top-2 right-2 bg-red-600/80 text-white p-2 rounded-full z-20"><Trash2 size={14}/></button>}
-                        </div>
-                        <div className="flex flex-col gap-2 mb-3">
-                             <a href={book.pdf_url} target="_blank" className="w-full bg-white/10 hover:bg-white/20 py-2 rounded-lg text-[10px] font-bold uppercase text-center border border-white/5">Open PDF</a>
-                             <button onClick={() => handleStartReading(book)} className="w-full bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg text-[10px] font-bold uppercase flex items-center justify-center gap-1 shadow-lg shadow-indigo-900/20"><Play size={10} fill="white"/> Track</button>
-                        </div>
-                        <h3 className="font-bold text-sm line-clamp-1">{book.title}</h3>
-                        <p className="text-xs text-white/40 line-clamp-1">{book.author}</p>
-                    </div>
-               ))}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'vote' && (
-            <div className="space-y-6 animate-in slide-in-from-right duration-500">
-                <h2 className="text-3xl font-bold px-2">Top Picks</h2>
-                <div className="space-y-3">
-                    {libraryBooks.sort((a,b) => ((b.voted_by?.length || 0) - (a.voted_by?.length || 0))).slice(0, 5).map((book, index) => (
-                        <div key={book.id} className="bg-white/5 backdrop-blur-md p-4 rounded-2xl flex items-center gap-4 border border-white/5 hover:border-indigo-500/50 transition duration-300 group">
-                            <div className={`text-3xl font-black ${index === 0 ? 'text-yellow-500' : 'text-white/10'}`}>#{index + 1}</div>
-                            <img src={book.cover} className="w-12 h-16 object-cover rounded-lg shadow-md"/>
-                            <div className="flex-1"><h3 className="font-bold text-lg leading-tight">{book.title}</h3><p className="text-xs text-white/50">{book.voted_by?.length || 0} votes</p></div>
-                            <button onClick={() => handleVote(book)} className={`p-3 rounded-full transition ${book.voted_by?.includes(session.user.id) ? 'bg-yellow-500 text-black' : 'bg-white/5 text-white/50'}`}><Trophy size={18}/></button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )}
-
-        {activeTab === 'chat' && (
-            <div className="flex flex-col h-[80vh] animate-in slide-in-from-bottom duration-500">
-                <div className="bg-indigo-950/40 backdrop-blur-xl border border-indigo-500/20 p-4 rounded-2xl mb-4 relative shadow-lg">
-                   <div className="flex items-center gap-2 mb-1"><Sparkles size={12} className="text-indigo-400"/><span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Live Discussion</span></div>
-                   {pinnedMessage && (
-                       <div className="bg-indigo-900/50 p-3 mt-2 rounded-lg border-l-4 border-indigo-400 flex justify-between items-center animate-in slide-in-from-top cursor-pointer hover:bg-indigo-900/70 transition">
-                            <div className="overflow-hidden">
-                                <p className="text-[10px] text-indigo-300 font-bold uppercase mb-0.5 flex items-center gap-1"><Pin size={10}/> Pinned</p>
-                                <p className="text-sm font-medium text-white line-clamp-1">{pinnedMessage.content}</p>
-                            </div>
-                            {isAdmin && <button onClick={() => handlePinMessage(pinnedMessage)} className="p-2 text-white/30 hover:text-white"><X size={14}/></button>}
-                       </div>
-                   )}
-                   {isAdmin && <button onClick={() => {const t = prompt("New Topic"); if(t) setDiscussionTopic(t)}} className="absolute top-4 right-4 text-white/30 hover:text-white"><Edit3 size={14}/></button>}
-                </div>
-                <div className="flex-1 space-y-4 overflow-y-auto mb-4 scrollbar-hide px-1 pb-4">
-                    {chatMessages.map(msg => (
-                        <div key={msg.id} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 ${msg.user_id === session.user.id ? 'flex-row-reverse' : ''}`}>
-                            <img src={msg.avatar_url || "https://via.placeholder.com/40"} onError={(e) => e.target.src="https://via.placeholder.com/40"} className="w-8 h-8 rounded-full object-cover border border-white/10 shadow-sm bg-gray-600"/>
-                            <div className={`relative p-3 rounded-2xl max-w-[80%] text-sm shadow-md ${msg.user_id === session.user.id ? 'bg-indigo-600/90 text-white rounded-tr-none' : 'bg-white/10 backdrop-blur-md text-white/90 rounded-tl-none border border-white/5'} ${msg.is_pinned ? 'border-indigo-500/50 ring-1 ring-indigo-500/30' : ''}`}>
-                                <p className="text-[10px] font-bold opacity-50 mb-1 flex justify-between items-center">
-                                    {msg.username}
-                                    {isAdmin && !msg.pending && (
-                                        <button onClick={() => handlePinMessage(msg)} className={`ml-2 hover:text-indigo-300 ${msg.is_pinned ? 'text-indigo-400' : 'text-white/20'}`}><Pin size={12} fill={msg.is_pinned ? "currentColor" : "none"}/></button>
+            {/* DASHBOARD TAB */}
+            {activeTab === 'dashboard' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
+                    {/* Main Feed Column */}
+                    <div className="lg:col-span-2 space-y-6">
+                        <div className="bg-gradient-to-r from-indigo-900 to-slate-900 border border-white/10 rounded-3xl p-8 relative overflow-hidden shadow-2xl">
+                            <div className="flex gap-6 items-start relative z-10">
+                                {profile?.current_book_cover && <img src={profile.current_book_cover} className="w-24 h-36 object-cover rounded-lg shadow-2xl border border-white/10" />}
+                                <div className="flex-1">
+                                    <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Currently Reading</h3>
+                                    <h2 className="text-3xl font-bold mb-4 leading-tight">{profile?.current_book_title || "No Book Selected"}</h2>
+                                    {profile?.current_book_title && (
+                                        <div>
+                                            <div className="w-full bg-black/30 rounded-full h-3 mb-2 overflow-hidden"><div className="bg-indigo-500 h-full transition-all duration-1000" style={{width: `${(profile.current_page / (profile.total_pages || 1)) * 100}%`}}></div></div>
+                                            <div className="flex justify-between text-xs text-white/60 font-medium mb-4"><span>Page {profile.current_page} of {profile.total_pages}</span><span>{Math.round((profile.current_page / (profile.total_pages || 1)) * 100)}%</span></div>
+                                            <button onClick={() => { setTempPage(profile.current_page); setShowProgressModal(true); }} className="bg-white/10 hover:bg-white/20 px-6 py-2 rounded-full font-bold text-sm transition">Update Progress</button>
+                                        </div>
                                     )}
-                                </p> 
-                                <div className="break-words">{formatMessageContent(msg.content)}</div>
-                                {msg.user_id === session.user.id && !msg.pending && <button onClick={() => handleDeleteMessage(msg.id)} className="absolute -left-8 top-2 text-white/20 hover:text-red-400"><Trash2 size={12}/></button>}
+                                    {!profile?.current_book_title && <button onClick={() => setActiveTab('library')} className="bg-indigo-600 hover:bg-indigo-500 px-6 py-2 rounded-full font-bold text-sm transition">Choose from Library</button>}
+                                </div>
                             </div>
                         </div>
-                    ))}
-                    <div ref={chatBottomRef} />
+                    </div>
+
+                    {/* Side Column */}
+                    <div className="space-y-6">
+                        <div className="bg-[#1a1d23] border border-white/5 rounded-3xl p-6 text-center">
+                            <h3 className="text-white/40 text-xs font-bold uppercase mb-4">Your Streak</h3>
+                            <Flame size={48} className="text-orange-500 mx-auto mb-2"/>
+                            <div className="text-4xl font-black text-white">{profile?.streak_count || 1}</div>
+                            <p className="text-sm text-white/50">Days Active</p>
+                        </div>
+                        <div className="bg-[#1a1d23] border border-white/5 rounded-3xl p-6 text-center">
+                            <h3 className="text-white/40 text-xs font-bold uppercase mb-4">Live Session</h3>
+                            <button onClick={() => window.open(PERMANENT_MEETING_LINK, '_blank')} className="w-full bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 py-4 rounded-2xl font-bold transition flex flex-col items-center gap-2">
+                                <Camera size={24}/>
+                                <span>Join Live Room</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                {showEmoji && ( <div className="bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl p-3 mb-2 flex gap-2 overflow-x-auto">{["❤️","🔥","😂","👍","👏","🎉","📚","💡","👀","🚀"].map(e => (<button key={e} onClick={() => {setNewMessage(p=>p+e);}} className="text-2xl p-2 hover:bg-white/10 rounded-xl transition">{e}</button>))}</div>)}
-                <form onSubmit={handleSendMessage} className="flex gap-2 bg-black/40 backdrop-blur-xl p-2 rounded-2xl border border-white/10 items-center shadow-2xl">
-                    <button type="button" onClick={() => setShowEmoji(!showEmoji)} className={`p-3 rounded-xl transition ${showEmoji ? 'text-indigo-400 bg-white/10' : 'text-gray-400 hover:text-white'}`}><Smile size={20}/></button>
-                    <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Share your thoughts..." className="flex-1 bg-transparent px-2 text-sm focus:outline-none placeholder:text-white/20" />
-                    <button className="bg-indigo-600 p-3 rounded-xl hover:bg-indigo-500 transition shadow-lg shadow-indigo-500/20"><Send size={18}/></button>
-                </form>
-            </div>
-        )}
+            )}
 
-        <div className="fixed bottom-6 left-6 right-6 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-full flex justify-around p-3 z-30 shadow-2xl">
-            {[{ id: 'dashboard', icon: Home, label: 'Home' }, { id: 'library', icon: BookOpen, label: 'Library' }, { id: 'vote', icon: Trophy, label: 'Vote' }, { id: 'chat', icon: MessageCircle, label: 'Chat' }].map((tab) => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ${activeTab === tab.id ? 'bg-white text-black font-bold shadow-lg' : 'text-white/50 hover:text-white hover:bg-white/10'}`}>
-                <tab.icon size={20} />
-                {activeTab === tab.id && <span className="text-xs">{tab.label}</span>}
-              </button>
-            ))}
+            {/* CHAT TAB */}
+            {activeTab === 'chat' && (
+                <div className="h-[calc(100vh-6rem)] flex flex-col bg-[#1a1d23] border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
+                    <div className="p-4 border-b border-white/5 bg-black/20 flex justify-between items-center">
+                        <div><h2 className="font-bold">Club Chat</h2><p className="text-xs text-white/40">Topic: {discussionTopic}</p></div>
+                        {isAdmin && <button onClick={() => {const t = prompt("New Topic"); if(t) setDiscussionTopic(t)}}><Edit3 size={16} className="text-white/30 hover:text-white"/></button>}
+                    </div>
+                    {pinnedMessage && (
+                        <div className="bg-indigo-900/30 p-3 border-l-4 border-indigo-500 flex justify-between items-center">
+                            <p className="text-sm text-indigo-200 line-clamp-1"><Pin size={12} className="inline mr-2"/>{pinnedMessage.content}</p>
+                            {isAdmin && <button onClick={() => handlePinMessage(pinnedMessage)}><X size={14} className="text-white/50 hover:text-white"/></button>}
+                        </div>
+                    )}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                        {chatMessages.map(msg => (
+                             <div key={msg.id} className={`flex gap-3 ${msg.user_id === session.user.id ? 'flex-row-reverse' : ''}`}>
+                                 <img src={msg.avatar_url || "https://via.placeholder.com/40"} className="w-8 h-8 rounded-full bg-gray-700 object-cover"/>
+                                 <div className={`p-3 rounded-2xl max-w-[80%] text-sm ${msg.user_id === session.user.id ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white/10 text-white/90 rounded-tl-none'}`}>
+                                     <div className="flex justify-between items-center gap-4 mb-1"><span className="text-[10px] font-bold opacity-50">{msg.username}</span>{isAdmin && <button onClick={() => handlePinMessage(msg)}><Pin size={10} className={msg.is_pinned ? "text-indigo-300" : "text-white/20"}/></button>}</div>
+                                     <div className="break-words">{formatMessageContent(msg.content)}</div>
+                                 </div>
+                             </div>
+                        ))}
+                        <div ref={chatBottomRef} />
+                    </div>
+                    <div className="p-4 bg-black/20 border-t border-white/5">
+                        <form onSubmit={handleSendMessage} className="flex gap-2">
+                             <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Type a message..." className="flex-1 bg-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:bg-white/10 transition"/>
+                             <button className="bg-indigo-600 p-3 rounded-xl hover:bg-indigo-500 transition"><Send size={18}/></button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* LIBRARY TAB */}
+            {activeTab === 'library' && (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-3xl font-bold">Library</h2>
+                        {isAdmin && <button onClick={() => setShowUploadForm(true)} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 transition"><Plus size={16}/> Add Book</button>}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                         {libraryBooks.map(book => (
+                            <div key={book.id} className="group bg-[#1a1d23] border border-white/5 rounded-2xl p-3 hover:border-indigo-500/50 transition">
+                                <div className="aspect-[2/3] bg-black/50 rounded-xl mb-3 overflow-hidden relative shadow-lg">
+                                    <img src={book.cover} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                                    {isAdmin && <button onClick={(e) => { e.preventDefault(); handleDeleteBook(book.id); }} className="absolute top-2 right-2 bg-red-600/80 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition"><Trash2 size={14}/></button>}
+                                </div>
+                                <h3 className="font-bold text-sm line-clamp-1 mb-1">{book.title}</h3>
+                                <div className="flex flex-col gap-2 mt-2">
+                                     <button onClick={() => handleStartReading(book)} className="w-full bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white py-2 rounded-lg text-xs font-bold uppercase transition">Track</button>
+                                     <a href={book.pdf_url} target="_blank" className="text-center text-xs text-white/30 hover:text-white transition">Read PDF</a>
+                                </div>
+                            </div>
+                         ))}
+                    </div>
+                </div>
+            )}
+            
+            {/* VOTE TAB */}
+            {activeTab === 'vote' && (
+                <div className="max-w-2xl mx-auto space-y-4">
+                    <h2 className="text-3xl font-bold mb-6">Vote for Next Month</h2>
+                    {libraryBooks.sort((a,b) => ((b.voted_by?.length || 0) - (a.voted_by?.length || 0))).map((book, index) => (
+                        <div key={book.id} className="bg-[#1a1d23] border border-white/5 p-4 rounded-2xl flex items-center gap-4 hover:bg-white/5 transition">
+                             <div className={`text-2xl font-black w-8 text-center ${index === 0 ? 'text-yellow-500' : 'text-white/10'}`}>#{index + 1}</div>
+                             <img src={book.cover} className="w-12 h-16 object-cover rounded-md"/>
+                             <div className="flex-1">
+                                 <h3 className="font-bold">{book.title}</h3>
+                                 <p className="text-sm text-white/40">{book.voted_by?.length || 0} Votes</p>
+                             </div>
+                             <button onClick={() => handleVote(book)} className={`px-4 py-2 rounded-full font-bold text-sm transition ${book.voted_by?.includes(session.user.id) ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/50 hover:text-white'}`}>Vote</button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
         </div>
+      </main>
 
-        {/* --- MODALS --- */}
-        {viewImage && (
-            <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setViewImage(null)}>
-                <button className="absolute top-6 right-6 text-white/50 hover:text-white p-4"><X size={32}/></button>
-                <img src={viewImage} className="max-w-full max-h-[80vh] rounded-xl shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()}/>
+      {/* --- MODALS --- */}
+      {viewImage && (
+            <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-8 animate-in fade-in" onClick={() => setViewImage(null)}>
+                <button className="absolute top-6 right-6 text-white/50 hover:text-white p-2 rounded-full bg-white/10"><X size={24}/></button>
+                <img src={viewImage} className="max-w-full max-h-full rounded-lg shadow-2xl border-2 border-white/10" onClick={(e) => e.stopPropagation()}/>
             </div>
-        )}
+      )}
 
-        {showProgressModal && (
+      {showProgressModal && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in">
-                <div className="bg-gray-900 border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center">
-                    <h3 className="text-2xl font-bold mb-2">Update Progress</h3>
-                    <p className="text-white/50 mb-6">You are reading <b>{profile.current_book_title}</b></p>
-                    <div className="text-5xl font-black mb-6 text-indigo-400">{tempPage} <span className="text-lg text-white/30 font-medium">/ {profile.total_pages}</span></div>
+                <div className="bg-[#1a1d23] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center">
+                    <h3 className="text-xl font-bold mb-2">Update Progress</h3>
+                    <p className="text-white/50 mb-6 text-sm">Reading <b>{profile.current_book_title}</b></p>
+                    <div className="text-5xl font-black mb-6 text-indigo-400">{tempPage}</div>
                     <input type="range" min="0" max={profile.total_pages || 100} value={tempPage} onChange={(e) => setTempPage(e.target.value)} className="w-full accent-indigo-500 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer mb-8"/>
-                    <button onClick={handleUpdateProgress} className="w-full bg-indigo-600 font-bold py-4 rounded-xl mb-3">Save Progress</button>
+                    <button onClick={handleUpdateProgress} className="w-full bg-indigo-600 font-bold py-3 rounded-xl mb-3">Save</button>
                     <button onClick={() => setShowProgressModal(false)} className="text-white/40 text-sm">Cancel</button>
                 </div>
             </div>
-        )}
-        
-        {showUploadForm && (
+      )}
+      
+      {showUploadForm && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in">
-            <div className="bg-gray-900 border border-white/10 rounded-3xl w-full max-w-sm p-6 shadow-2xl relative">
+            <div className="bg-[#1a1d23] border border-white/10 rounded-3xl w-full max-w-sm p-6 relative">
               <button onClick={() => setShowUploadForm(false)} className="absolute top-4 right-4 text-white/30 hover:text-white"><X size={20}/></button>
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><UploadCloud size={20} className="text-indigo-500"/> Add to Library</h3>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><UploadCloud size={20} className="text-indigo-500"/> Add Book</h3>
               <form onSubmit={handleUploadBook} className="space-y-4">
-                <input type="text" value={newBookTitle} onChange={e => setNewBookTitle(e.target.value)} className="w-full p-4 bg-black/50 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none" placeholder="Book Title" />
-                <input type="text" value={newBookAuthor} onChange={e => setNewBookAuthor(e.target.value)} className="w-full p-4 bg-black/50 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none" placeholder="Author" />
+                <input type="text" value={newBookTitle} onChange={e => setNewBookTitle(e.target.value)} className="w-full p-4 bg-black/20 rounded-xl border border-white/10 text-white" placeholder="Book Title" />
+                <input type="text" value={newBookAuthor} onChange={e => setNewBookAuthor(e.target.value)} className="w-full p-4 bg-black/20 rounded-xl border border-white/10 text-white" placeholder="Author" />
                 <div className="p-4 border border-dashed border-white/20 rounded-xl text-center"><p className="text-xs text-white/40 mb-2">Book PDF</p><input type="file" accept="application/pdf" onChange={e => setSelectedPdf(e.target.files[0])} className="text-xs text-white/70 w-full" /></div>
                 <div className="p-4 border border-dashed border-white/20 rounded-xl text-center"><p className="text-xs text-white/40 mb-2">Cover Image</p><input type="file" accept="image/*" onChange={e => setSelectedCover(e.target.files[0])} className="text-xs text-white/70 w-full" /></div>
-                <button disabled={isUploading} className="w-full bg-emerald-600 font-bold py-3 rounded-xl shadow-lg shadow-emerald-900/50 hover:scale-[1.02] transition">{isUploading ? "Uploading..." : "Save Book"}</button>
+                <button disabled={isUploading} className="w-full bg-emerald-600 font-bold py-3 rounded-xl hover:scale-[1.02] transition">{isUploading ? "Uploading..." : "Save Book"}</button>
               </form>
             </div>
           </div>
-        )}
-      </main>
+      )}
+
     </div>
   );
 };
