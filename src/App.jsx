@@ -156,6 +156,7 @@ const App = () => {
     setIsUploading(true);
     try {
       const pdfName = `pdf-${Date.now()}`;
+      // NOTE: Books still go to 'book-files' bucket
       await supabase.storage.from('book-files').upload(pdfName, selectedPdf);
       const { data: { publicUrl: pdfUrl } } = supabase.storage.from('book-files').getPublicUrl(pdfName);
       let coverUrl = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=600&auto=format&fit=crop&q=60";
@@ -180,7 +181,6 @@ const App = () => {
 
   // --- JOIN LIVE ---
   const handleJoinLive = () => {
-    // Opens link immediately.
     window.open(PERMANENT_MEETING_LINK, '_blank');
   };
 
@@ -213,8 +213,10 @@ const App = () => {
     });
   };
 
-  // Basic CRUD
-const handleUpdateAvatar = async (e) => {
+  // --- BASIC CRUD ---
+  
+  // FIXED AVATAR UPLOAD FUNCTION
+  const handleUpdateAvatar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -244,15 +246,7 @@ const handleUpdateAvatar = async (e) => {
       showNotification("Error updating profile", "error");
     }
   };
-    const file = e.target.files[0]; if(!file) return;
-    const objectUrl = URL.createObjectURL(file); setProfile(prev => ({...prev, avatar_url: objectUrl})); setIsUploading(true);
-    // NEW CORRECT CODE
-const fileName = `avatar-${Date.now()}-${session.user.id}`;
-await supabase.storage.from('avatars').upload(fileName, file);  // <--- Change this
-const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName); // <--- And thise.storage.from('book-files').upload(fileName, file);
-    const { data: { publicUrl } } = supabase.storage.from('book-files').getPublicUrl(fileName);
-    await supabase.from('profiles').upsert({ id: session.user.id, avatar_url: publicUrl }); showNotification("Pic Updated!"); } catch(e){showNotification("Failed","error")} finally {setIsUploading(false);}
-  };
+
   const handleUpdateUsername = async () => { const n = prompt("New Name:", profile?.username); if(n) { setProfile(p=>({...p, username:n})); await supabase.from('profiles').update({username:n}).eq('id',session.user.id); }};
   const handleDeleteBook = async (id) => { if(window.confirm("Delete book?")) { await supabase.from('books').delete().eq('id', id); fetchBooks(); }};
   const handleDeleteMessage = async (id) => { if(window.confirm("Delete msg?")) { setChatMessages(prev => prev.filter(m => m.id !== id)); await supabase.from('messages').delete().eq('id', id); }};
