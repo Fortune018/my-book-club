@@ -34,7 +34,6 @@ const App = () => {
   const [discussionTopic, setDiscussionTopic] = useState("Introduction");
   
   // UI States
-  const [showEmoji, setShowEmoji] = useState(false);
   const [isUploading, setIsUploading] = useState(false); 
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -44,6 +43,7 @@ const App = () => {
   const [viewImage, setViewImage] = useState(null); 
   const [tempAbout, setTempAbout] = useState("");
   const [tempGoal, setTempGoal] = useState("");
+  const [tempUsername, setTempUsername] = useState(""); // New state for editing username
   
   // Progress States
   const [showProgressModal, setShowProgressModal] = useState(false);
@@ -90,6 +90,7 @@ const App = () => {
             setProfile({ ...data, streak_count: newStreak });
             setTempAbout(data.about || "");
             setTempGoal(data.joining_goal || "");
+            setTempUsername(data.username || "");
         }
     } catch (e) { console.error("Profile Error", e); }
   };
@@ -155,7 +156,7 @@ const App = () => {
   const handleSaveProfile = async () => {
     setIsUploading(true);
     try {
-        const updates = { about: tempAbout, joining_goal: tempGoal, username: profile.username };
+        const updates = { about: tempAbout, joining_goal: tempGoal, username: tempUsername };
         await supabase.from('profiles').update(updates).eq('id', session.user.id);
         setProfile(prev => ({ ...prev, ...updates }));
         setIsEditingProfile(false);
@@ -407,20 +408,28 @@ const App = () => {
                                     onClick={() => setViewImage(profile.avatar_url)} 
                                     className="w-40 h-40 rounded-[2rem] border-[6px] border-[#09090b] object-cover shadow-2xl cursor-pointer transition transform hover:scale-105 hover:rotate-2"
                                 />
-                                <button onClick={() => setIsEditingProfile(true)} className="absolute bottom-2 -right-2 bg-white text-black p-3 rounded-xl shadow-lg hover:bg-zinc-200 transition border-4 border-[#09090b]">
-                                    <Edit3 size={18}/>
-                                </button>
+                                {/* Hidden input triggered by button below if needed, or keeping existing logic */}
                             </div>
                         </div>
                     </div>
 
                     <div className="mt-4 px-4 mb-8">
-                        <div className="flex justify-between items-start pl-48">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:pl-48 gap-4">
                             <div>
-                                <h2 className="text-4xl font-black tracking-tight">{profile?.username || "Reader"}</h2>
+                                {isEditingProfile ? (
+                                    <input value={tempUsername} onChange={e => setTempUsername(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-3xl font-black text-white focus:outline-none focus:border-indigo-500 w-full" placeholder="Username" />
+                                ) : (
+                                    <h2 className="text-4xl font-black tracking-tight">{profile?.username || "Reader"}</h2>
+                                )}
                                 <p className="text-zinc-500 font-medium mt-1">Joined 2026 • {profile?.streak_count || 0} Day Streak 🔥</p>
                             </div>
-                            {isEditingProfile && <button onClick={handleSaveProfile} className="bg-emerald-600 hover:bg-emerald-500 px-8 py-3 rounded-xl font-bold shadow-lg transition flex items-center gap-2"><Save size={18}/> Save Changes</button>}
+                            
+                            {/* THE EDIT BUTTONS */}
+                            {isEditingProfile ? (
+                                <button onClick={handleSaveProfile} className="bg-emerald-600 hover:bg-emerald-500 px-8 py-3 rounded-xl font-bold shadow-lg transition flex items-center gap-2 text-white"><Save size={18}/> Save Changes</button>
+                            ) : (
+                                <button onClick={() => setIsEditingProfile(true)} className="bg-white/10 hover:bg-white/20 px-8 py-3 rounded-xl font-bold shadow-lg transition flex items-center gap-2 text-white border border-white/10"><Edit3 size={18}/> Edit Profile</button>
+                            )}
                         </div>
                     </div>
 
