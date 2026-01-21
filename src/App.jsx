@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   Home, BookOpen, Trophy, Plus, X, UploadCloud, 
   MessageCircle, Lock, User, LogOut, Send, Trash2, Edit3, Pin, Flame, 
-  Smile, CheckCircle, AlertCircle, Sparkles, Zap, Play, Camera, Video
+  Smile, CheckCircle, AlertCircle, Sparkles, Zap, Play, Camera, Video,
+  Save, Maximize2
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -34,6 +35,12 @@ const App = () => {
   const [showEmoji, setShowEmoji] = useState(false);
   const [isUploading, setIsUploading] = useState(false); 
   const [showUploadForm, setShowUploadForm] = useState(false);
+  
+  // Profile & Image View States
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [viewImage, setViewImage] = useState(null); // URL of image to view full screen
+  const [tempAbout, setTempAbout] = useState("");
+  const [tempGoal, setTempGoal] = useState("");
   
   // Progress States
   const [showProgressModal, setShowProgressModal] = useState(false);
@@ -66,10 +73,19 @@ const App = () => {
     try {
         const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
         if (!data) {
-            const newProfile = { id: userId, email: userEmail, username: "Reader", streak_count: 1, last_seen: new Date() };
+            const newProfile = { 
+                id: userId, 
+                email: userEmail, 
+                username: "Reader", 
+                streak_count: 1, 
+                last_seen: new Date(),
+                about: "I am a mindful reader.",
+                joining_goal: "To read more books."
+            };
             await supabase.from('profiles').upsert([newProfile]);
             setProfile(newProfile);
         } else {
+            // Update Streak Logic
             const today = new Date().toDateString();
             const lastSeen = new Date(data.last_seen || new Date()).toDateString();
             let newStreak = data.streak_count || 1;
@@ -82,6 +98,8 @@ const App = () => {
                 await supabase.from('profiles').update({ last_seen: new Date(), streak_count: newStreak }).eq('id', userId);
             }
             setProfile({ ...data, streak_count: newStreak });
+            setTempAbout(data.about || "");
+            setTempGoal(data.joining_goal || "");
         }
     } catch (e) { console.error("Profile Error", e); }
   };
@@ -92,7 +110,6 @@ const App = () => {
       fetchMessages();
       const channel = supabase.channel('public:messages')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => { 
-            // Handle Updates (Pins) and Inserts
             if(payload.eventType === 'UPDATE') {
                 setChatMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new : m));
             } else if (payload.eventType === 'INSERT') {
@@ -150,13 +167,32 @@ const App = () => {
     showNotification("Progress Updated!");
   };
 
+  const handleSaveProfile = async () => {
+    setIsUploading(true);
+    try {
+        const updates = { 
+            about: tempAbout, 
+            joining_goal: tempGoal,
+            username: profile.username // Persist username edits if any
+        };
+        
+        await supabase.from('profiles').update(updates).eq('id', session.user.id);
+        setProfile(prev => ({ ...prev, ...updates }));
+        setIsEditingProfile(false);
+        showNotification("Profile Updated Successfully!");
+    } catch(e) {
+        showNotification("Failed to update profile", "error");
+    } finally {
+        setIsUploading(false);
+    }
+  };
+
   const handleUploadBook = async (e) => {
     e.preventDefault();
     if (!newBookTitle || !selectedPdf) return showNotification("PDF required!", 'error');
     setIsUploading(true);
     try {
       const pdfName = `pdf-${Date.now()}`;
-      // NOTE: Books still go to 'book-files' bucket
       await supabase.storage.from('book-files').upload(pdfName, selectedPdf);
       const { data: { publicUrl: pdfUrl } } = supabase.storage.from('book-files').getPublicUrl(pdfName);
       let coverUrl = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=600&auto=format&fit=crop&q=60";
@@ -180,10 +216,7 @@ const App = () => {
   };
 
   // --- JOIN LIVE ---
-  const handleJoinLive = () => {
-    window.open(PERMANENT_MEETING_LINK, '_blank');
-  };
-
+  const handleJoinLive = () => { window.open(PERMANENT_MEETING_LINK, '_blank'); };
   const handleAdminStartLive = async () => {
     const msgText = `🎥 We are starting LIVE now! Click the 'Join Live' button on the dashboard to enter.`;
     await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url, is_pinned: true }]);
@@ -193,61 +226,36 @@ const App = () => {
   // --- PINNING LOGIC ---
   const handlePinMessage = async (msg) => {
       const newStatus = !msg.is_pinned;
-      // Optimistic update
       setChatMessages(prev => prev.map(m => m.id === msg.id ? { ...m, is_pinned: newStatus } : m));
       await supabase.from('messages').update({ is_pinned: newStatus }).eq('id', msg.id);
       showNotification(newStatus ? "Message Pinned!" : "Message Unpinned");
   };
-
   const pinnedMessage = chatMessages.find(m => m.is_pinned);
 
-  // --- LINK PARSER ---
   const formatMessageContent = (content) => {
     if (!content) return "";
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     return content.split(urlRegex).map((part, i) => {
-      if (part.match(urlRegex)) {
-        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-indigo-400 font-bold underline break-all hover:text-indigo-300">{part}</a>;
-      }
+      if (part.match(urlRegex)) return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-indigo-400 font-bold underline break-all hover:text-indigo-300">{part}</a>;
       return part;
     });
   };
 
   // --- BASIC CRUD ---
-  
-  // FIXED AVATAR UPLOAD FUNCTION
   const handleUpdateAvatar = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    // 1. Preview the image immediately
     const objectUrl = URL.createObjectURL(file);
     setProfile((prev) => ({ ...prev, avatar_url: objectUrl }));
-
     try {
       const fileName = `avatar-${Date.now()}-${session.user.id}`;
-
-      // 2. Upload to the correct 'avatars' bucket
       await supabase.storage.from('avatars').upload(fileName, file);
-
-      // 3. Get the new public URL
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
-
-      // 4. Update the database profile
-      await supabase.from('profiles').upsert({
-        id: session.user.id,
-        avatar_url: publicUrl
-      });
-
+      await supabase.from('profiles').upsert({ id: session.user.id, avatar_url: publicUrl });
       showNotification("Profile picture updated!", "success");
-
-    } catch (error) {
-      console.error("Error uploading avatar:", error);
-      showNotification("Error updating profile", "error");
-    }
+    } catch (error) { console.error("Error uploading avatar:", error); showNotification("Error updating profile", "error"); }
   };
 
-  const handleUpdateUsername = async () => { const n = prompt("New Name:", profile?.username); if(n) { setProfile(p=>({...p, username:n})); await supabase.from('profiles').update({username:n}).eq('id',session.user.id); }};
   const handleDeleteBook = async (id) => { if(window.confirm("Delete book?")) { await supabase.from('books').delete().eq('id', id); fetchBooks(); }};
   const handleDeleteMessage = async (id) => { if(window.confirm("Delete msg?")) { setChatMessages(prev => prev.filter(m => m.id !== id)); await supabase.from('messages').delete().eq('id', id); }};
   const handleSendMessage = async (e) => { e.preventDefault(); if (!newMessage.trim() || !profile) return; const msgText = newMessage; setNewMessage(""); setShowEmoji(false); const tempId = Date.now(); setChatMessages(prev => [...prev, { id: tempId, content: msgText, user_id: session.user.id, username: profile.username, avatar_url: profile.avatar_url, created_at: new Date().toISOString(), pending: true }]); await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Reader", avatar_url: profile.avatar_url }]); };
@@ -285,7 +293,7 @@ const App = () => {
       {notification && <div className={`fixed top-20 left-4 right-4 p-4 rounded-2xl flex items-center gap-3 shadow-2xl animate-in slide-in-from-top z-[100] backdrop-blur-md ${notification.type === 'error' ? 'bg-red-500/80' : 'bg-emerald-600/80'}`}>{notification.type === 'error' ? <AlertCircle size={24} /> : <CheckCircle size={24} />}<p className="font-bold text-sm">{notification.message}</p></div>}
 
       <nav className="fixed top-0 left-0 right-0 z-30 bg-black/20 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition" onClick={() => setActiveTab('profile')}>
           <div className="relative">{profile?.avatar_url ? <img src={profile.avatar_url} className="w-10 h-10 rounded-full object-cover border-2 border-indigo-500/50" onError={(e) => e.target.src="https://via.placeholder.com/40"} /> : <div className="bg-indigo-600 p-2 rounded-full"><User size={20} /></div>}<div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-black rounded-full"></div></div>
           <div><h1 className="text-sm font-bold opacity-60 uppercase tracking-widest">Welcome</h1><h2 className="text-lg font-bold leading-none">{profile?.username || 'Reader'}</h2></div>
         </div>
@@ -297,6 +305,74 @@ const App = () => {
 
       <main className="pt-24 px-4 max-w-lg mx-auto relative z-10">
         
+        {/* --- PROFILE TAB --- */}
+        {activeTab === 'profile' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 relative overflow-hidden shadow-2xl">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold">My Profile</h2>
+                        <button onClick={() => { setIsEditingProfile(!isEditingProfile); }} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition ${isEditingProfile ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'}`}>
+                            {isEditingProfile ? <Save size={16}/> : <Edit3 size={16}/>}
+                            {isEditingProfile ? "Save Changes" : "Edit Profile"}
+                        </button>
+                    </div>
+
+                    {/* AVATAR SECTION */}
+                    <div className="flex flex-col items-center mb-8">
+                        <div className="relative group">
+                            {profile?.avatar_url ? 
+                                <img 
+                                    src={profile.avatar_url} 
+                                    onClick={() => setViewImage(profile.avatar_url)} 
+                                    className="w-32 h-32 rounded-full object-cover border-4 border-white/10 shadow-2xl cursor-pointer hover:scale-105 transition"
+                                /> : 
+                                <div className="w-32 h-32 bg-indigo-600 rounded-full flex items-center justify-center border-4 border-white/10"><User size={64}/></div>
+                            }
+                            {/* Camera Icon only shows in Edit Mode */}
+                            {isEditingProfile && (
+                                <label className="absolute bottom-0 right-0 bg-indigo-600 text-white p-3 rounded-full cursor-pointer hover:bg-indigo-500 shadow-lg transition">
+                                    <Camera size={20}/>
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleUpdateAvatar}/>
+                                </label>
+                            )}
+                        </div>
+                        {isEditingProfile ? (
+                            <input type="text" value={profile.username} onChange={(e) => setProfile(p => ({...p, username: e.target.value}))} className="mt-4 bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-center text-xl font-bold w-full max-w-xs focus:outline-none focus:border-indigo-500" />
+                        ) : (
+                            <h2 className="mt-4 text-2xl font-bold">{profile?.username}</h2>
+                        )}
+                        <p className="text-white/40 text-sm uppercase tracking-widest mt-1">Club Member</p>
+                    </div>
+
+                    {/* DETAILS SECTION */}
+                    <div className="space-y-4">
+                        <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
+                            <h3 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2"><User size={12}/> About Me</h3>
+                            {isEditingProfile ? (
+                                <textarea value={tempAbout} onChange={(e) => setTempAbout(e.target.value)} className="w-full bg-white/5 rounded-xl p-3 text-sm text-white focus:outline-none border border-white/10 h-24 resize-none" placeholder="Tell us about yourself..."/>
+                            ) : (
+                                <p className="text-white/80 text-sm leading-relaxed">{profile?.about || "No bio yet."}</p>
+                            )}
+                        </div>
+
+                        <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
+                            <h3 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2"><Trophy size={12}/> My Goal</h3>
+                            {isEditingProfile ? (
+                                <textarea value={tempGoal} onChange={(e) => setTempGoal(e.target.value)} className="w-full bg-white/5 rounded-xl p-3 text-sm text-white focus:outline-none border border-white/10 h-24 resize-none" placeholder="What is your reading goal?"/>
+                            ) : (
+                                <p className="text-white/80 text-sm leading-relaxed">{profile?.joining_goal || "No goal set."}</p>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {isEditingProfile && (
+                        <button onClick={handleSaveProfile} className="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 py-4 rounded-xl font-bold text-white shadow-lg shadow-indigo-900/40 transition">Save Profile</button>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* --- DASHBOARD TAB --- */}
         {activeTab === 'dashboard' && (
            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
              <div className="bg-black/30 backdrop-blur-xl border border-white/10 rounded-3xl p-6 relative overflow-hidden shadow-2xl">
@@ -314,15 +390,13 @@ const App = () => {
                     <button onClick={() => setActiveTab('library')} className="w-full bg-indigo-600/20 text-indigo-300 py-3 rounded-xl font-bold text-sm border border-indigo-500/30 hover:bg-indigo-600 hover:text-white transition">Browse Library to Start</button>
                 )}
              </div>
-
-             <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center relative overflow-hidden shadow-2xl">
+             
+             {/* Shortcut to Profile */}
+             <div onClick={() => setActiveTab('profile')} className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-center relative overflow-hidden shadow-2xl cursor-pointer hover:bg-white/10 transition group">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-                <div className="relative inline-block group">
-                    {profile?.avatar_url ? <img src={profile.avatar_url} className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-4 border-white/10 shadow-xl" onError={(e) => e.target.src="https://via.placeholder.com/100"} /> : <div className="w-24 h-24 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center border-4 border-white/10 shadow-xl"><User size={40}/></div>}
-                    <label className="absolute bottom-4 right-0 bg-white text-indigo-900 p-2 rounded-full cursor-pointer hover:bg-indigo-100 transition shadow-lg"><Camera size={14}/><input type="file" accept="image/*" className="hidden" onChange={handleUpdateAvatar}/></label>
-                </div>
-                <button onClick={handleUpdateUsername} className="flex items-center gap-2 mx-auto justify-center opacity-80 hover:opacity-100 transition mb-1"><h3 className="text-xl font-bold tracking-tight">{profile?.username}</h3><Edit3 size={14}/></button>
-                <p className="text-white/40 text-xs font-medium uppercase tracking-widest">Club Member</p>
+                {profile?.avatar_url ? <img src={profile.avatar_url} className="w-20 h-20 rounded-full object-cover mx-auto mb-4 border-4 border-white/10 shadow-xl group-hover:scale-105 transition" /> : <div className="w-20 h-20 bg-indigo-600 rounded-full mx-auto mb-4 flex items-center justify-center border-4 border-white/10 shadow-xl"><User size={30}/></div>}
+                <h3 className="text-xl font-bold tracking-tight">{profile?.username}</h3>
+                <p className="text-white/40 text-xs font-medium uppercase tracking-widest">View Profile</p>
              </div>
 
              <div className="grid grid-cols-2 gap-4">
@@ -392,8 +466,6 @@ const App = () => {
             <div className="flex flex-col h-[80vh] animate-in slide-in-from-bottom duration-500">
                 <div className="bg-indigo-950/40 backdrop-blur-xl border border-indigo-500/20 p-4 rounded-2xl mb-4 relative shadow-lg">
                    <div className="flex items-center gap-2 mb-1"><Sparkles size={12} className="text-indigo-400"/><span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Live Discussion</span></div>
-                   
-                   {/* PINNED MESSAGE BANNER */}
                    {pinnedMessage && (
                        <div className="bg-indigo-900/50 p-3 mt-2 rounded-lg border-l-4 border-indigo-400 flex justify-between items-center animate-in slide-in-from-top cursor-pointer hover:bg-indigo-900/70 transition">
                             <div className="overflow-hidden">
@@ -403,10 +475,8 @@ const App = () => {
                             {isAdmin && <button onClick={() => handlePinMessage(pinnedMessage)} className="p-2 text-white/30 hover:text-white"><X size={14}/></button>}
                        </div>
                    )}
-                   
                    {isAdmin && <button onClick={() => {const t = prompt("New Topic"); if(t) setDiscussionTopic(t)}} className="absolute top-4 right-4 text-white/30 hover:text-white"><Edit3 size={14}/></button>}
                 </div>
-
                 <div className="flex-1 space-y-4 overflow-y-auto mb-4 scrollbar-hide px-1 pb-4">
                     {chatMessages.map(msg => (
                         <div key={msg.id} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 ${msg.user_id === session.user.id ? 'flex-row-reverse' : ''}`}>
@@ -414,7 +484,6 @@ const App = () => {
                             <div className={`relative p-3 rounded-2xl max-w-[80%] text-sm shadow-md ${msg.user_id === session.user.id ? 'bg-indigo-600/90 text-white rounded-tr-none' : 'bg-white/10 backdrop-blur-md text-white/90 rounded-tl-none border border-white/5'} ${msg.is_pinned ? 'border-indigo-500/50 ring-1 ring-indigo-500/30' : ''}`}>
                                 <p className="text-[10px] font-bold opacity-50 mb-1 flex justify-between items-center">
                                     {msg.username}
-                                    {/* ADMIN PIN BUTTON */}
                                     {isAdmin && !msg.pending && (
                                         <button onClick={() => handlePinMessage(msg)} className={`ml-2 hover:text-indigo-300 ${msg.is_pinned ? 'text-indigo-400' : 'text-white/20'}`}><Pin size={12} fill={msg.is_pinned ? "currentColor" : "none"}/></button>
                                     )}
@@ -444,7 +513,14 @@ const App = () => {
             ))}
         </div>
 
-        {/* MODALS */}
+        {/* --- MODALS --- */}
+        {viewImage && (
+            <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setViewImage(null)}>
+                <button className="absolute top-6 right-6 text-white/50 hover:text-white p-4"><X size={32}/></button>
+                <img src={viewImage} className="max-w-full max-h-[80vh] rounded-xl shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()}/>
+            </div>
+        )}
+
         {showProgressModal && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in">
                 <div className="bg-gray-900 border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center">
