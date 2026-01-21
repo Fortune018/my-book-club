@@ -4,7 +4,7 @@ import {
   Home, BookOpen, Trophy, Plus, X, UploadCloud, 
   MessageCircle, Lock, User, LogOut, Send, Trash2, Edit3, Pin, Flame, 
   Smile, CheckCircle, AlertCircle, Sparkles, Play, Camera, 
-  Save, Layout, Menu
+  Save, Layout, Menu, Activity, Heart
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -37,11 +37,11 @@ const App = () => {
   const [showEmoji, setShowEmoji] = useState(false);
   const [isUploading, setIsUploading] = useState(false); 
   const [showUploadForm, setShowUploadForm] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false); // For mobile toggle
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   
   // Profile & Image View States
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [viewImage, setViewImage] = useState(null); // The URL of the image to show BOLD
+  const [viewImage, setViewImage] = useState(null); 
   const [tempAbout, setTempAbout] = useState("");
   const [tempGoal, setTempGoal] = useState("");
   
@@ -234,22 +234,23 @@ const App = () => {
   async function fetchMessages() { const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true }); setChatMessages(data || []); }
   const handleAdminToggle = () => { if (isAdmin) setIsAdmin(false); else if (window.prompt("Admin PIN:") === ADMIN_PIN) { setIsAdmin(true); showNotification("Admin Active"); }};
 
-  // --- LOGIN SCREEN (Unchanged) ---
+  // --- LOGIN SCREEN (Modern Glass) ---
   if (!session) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-6 relative overflow-hidden font-sans">
-        {notification && <div className="fixed top-6 left-0 right-0 text-center z-50"><span className="bg-emerald-500 px-6 py-2 rounded-full font-bold shadow-lg">{notification.message}</span></div>}
-        <div className="w-full max-w-sm relative z-10 bg-black/40 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl">
-           <div className="flex justify-center mb-6"><div className="bg-indigo-600 p-4 rounded-2xl shadow-lg"><BookOpen size={40} className="text-white" /></div></div>
-           <h1 className="text-3xl font-black text-center mb-2">Mindful<span className="text-indigo-400">Readers</span></h1>
-           <p className="text-center text-white/50 mb-8 font-medium">Join the Community</p>
+      <div className="min-h-screen bg-[#09090b] text-white flex items-center justify-center p-6 relative overflow-hidden font-sans">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/40 via-[#09090b] to-[#09090b]"></div>
+        {notification && <div className="fixed top-6 left-0 right-0 text-center z-50"><span className="bg-emerald-500/90 backdrop-blur-md px-6 py-2 rounded-full font-bold shadow-lg border border-white/10">{notification.message}</span></div>}
+        <div className="w-full max-w-sm relative z-10 bg-black/40 backdrop-blur-2xl border border-white/10 p-8 rounded-[2rem] shadow-2xl ring-1 ring-white/5">
+           <div className="flex justify-center mb-8"><div className="bg-gradient-to-tr from-indigo-600 to-violet-600 p-4 rounded-2xl shadow-xl shadow-indigo-900/30"><BookOpen size={40} className="text-white" /></div></div>
+           <h1 className="text-4xl font-black text-center mb-2 tracking-tight">Mindful<span className="text-indigo-400">Readers</span></h1>
+           <p className="text-center text-zinc-400 mb-8 font-medium">Your Sanctuary for Knowledge</p>
            <form onSubmit={handleAuth} className="space-y-4">
-              {authMode === 'signup' && <input type="text" placeholder="Choose a Username" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none text-white" required />}
-              <input type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none text-white" required />
-              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/10 focus:border-indigo-500 focus:outline-none text-white" required />
-              <button disabled={isUploading} className="w-full bg-indigo-600 font-bold py-4 rounded-xl hover:scale-[1.02] transition shadow-lg">{isUploading ? "Connecting..." : (authMode === 'login' ? "Enter Sanctuary" : "Join Club")}</button>
+              {authMode === 'signup' && <input type="text" placeholder="Choose a Username" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/5 focus:border-indigo-500 focus:outline-none text-white transition placeholder:text-zinc-600" required />}
+              <input type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/5 focus:border-indigo-500 focus:outline-none text-white transition placeholder:text-zinc-600" required />
+              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-white/5 rounded-xl border border-white/5 focus:border-indigo-500 focus:outline-none text-white transition placeholder:text-zinc-600" required />
+              <button disabled={isUploading} className="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-zinc-200 transition shadow-lg">{isUploading ? "Connecting..." : (authMode === 'login' ? "Enter Sanctuary" : "Join Club")}</button>
            </form>
-           <div className="mt-8 text-center text-sm text-white/40"><button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-indigo-400 font-bold hover:text-white transition">{authMode === 'login' ? "Create Account" : "Sign In"}</button></div>
+           <div className="mt-8 text-center text-sm text-zinc-500"><button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-white font-bold hover:underline transition">{authMode === 'login' ? "Create Account" : "Sign In"}</button></div>
         </div>
       </div>
     );
@@ -257,28 +258,20 @@ const App = () => {
 
   // --- APP LAYOUT ---
   return (
-    <div className="min-h-screen bg-[#0f1115] text-white font-sans flex overflow-hidden">
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans flex overflow-hidden">
       
-      {/* --- SIDEBAR (THE MENU BY THE SIDE) --- */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#1a1d23] border-r border-white/5 transform transition-transform duration-300 ease-in-out ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0`}>
+      {/* --- MODERN SIDEBAR --- */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-[#09090b]/95 backdrop-blur-xl border-r border-white/5 transform transition-transform duration-300 ease-in-out ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0`}>
         <div className="p-6 flex flex-col h-full">
             {/* Logo */}
-            <div className="flex items-center gap-3 mb-10">
-                <div className="bg-indigo-600 p-2 rounded-xl"><BookOpen size={24} className="text-white"/></div>
-                <h1 className="text-xl font-bold">Mindful<span className="text-indigo-400">Readers</span></h1>
-            </div>
-
-            {/* User Mini Profile */}
-            <div className="mb-8 p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center gap-3 hover:bg-white/10 transition cursor-pointer" onClick={() => setActiveTab('profile')}>
-                 <img src={profile?.avatar_url || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover border border-indigo-500/50" />
-                 <div className="overflow-hidden">
-                     <h3 className="font-bold text-sm truncate">{profile?.username || "Reader"}</h3>
-                     <p className="text-xs text-white/40">View Profile</p>
-                 </div>
+            <div className="flex items-center gap-3 mb-12">
+                <div className="bg-gradient-to-tr from-indigo-600 to-violet-600 p-2.5 rounded-xl shadow-lg shadow-indigo-900/20"><BookOpen size={20} className="text-white"/></div>
+                <h1 className="text-xl font-bold tracking-tight">Mindful<span className="text-indigo-400">Readers</span></h1>
             </div>
 
             {/* Navigation Links */}
             <nav className="space-y-2 flex-1">
+                <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest px-4 mb-2">Menu</h3>
                 {[
                     { id: 'dashboard', icon: Layout, label: 'Dashboard' },
                     { id: 'profile', icon: User, label: 'My Profile' },
@@ -287,30 +280,35 @@ const App = () => {
                     { id: 'chat', icon: MessageCircle, label: 'Chat Room' }
                 ].map((item) => (
                     <button key={item.id} onClick={() => { setActiveTab(item.id); setShowMobileMenu(false); }} 
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}>
-                        <item.icon size={20} />
-                        <span className="font-medium text-sm">{item.label}</span>
+                        className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition font-medium text-sm group ${activeTab === item.id ? 'bg-white text-black shadow-lg shadow-white/5' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}>
+                        <item.icon size={20} className={activeTab === item.id ? "text-black" : "text-zinc-500 group-hover:text-white transition"}/>
+                        <span>{item.label}</span>
                     </button>
                 ))}
             </nav>
 
-            {/* Admin & Logout */}
-            <div className="border-t border-white/5 pt-4 space-y-2">
-                <button onClick={handleAdminToggle} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${isAdmin ? 'text-indigo-400 bg-indigo-500/10' : 'text-white/30 hover:text-white'}`}>
-                    <Lock size={18} /> <span className="text-sm">Admin Mode</span>
-                </button>
-                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400/50 hover:bg-red-500/10 hover:text-red-400 transition">
-                    <LogOut size={18} /> <span className="text-sm">Log Out</span>
-                </button>
+            {/* User Mini Profile */}
+            <div className="border-t border-white/5 pt-6">
+                 <div className="p-3 bg-white/5 rounded-2xl border border-white/5 flex items-center gap-3 hover:bg-white/10 transition cursor-pointer group" onClick={() => setActiveTab('profile')}>
+                     <img src={profile?.avatar_url || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover border border-white/10 group-hover:border-indigo-500 transition" />
+                     <div className="overflow-hidden flex-1">
+                         <h3 className="font-bold text-sm truncate text-white">{profile?.username || "Reader"}</h3>
+                         <p className="text-xs text-zinc-500">View Profile</p>
+                     </div>
+                 </div>
+                 <div className="flex gap-2 mt-2">
+                    <button onClick={handleAdminToggle} className={`flex-1 flex justify-center py-2 rounded-xl transition ${isAdmin ? 'text-indigo-400 bg-indigo-500/10' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}><Lock size={16} /></button>
+                    <button onClick={handleLogout} className="flex-1 flex justify-center py-2 rounded-xl text-zinc-500 hover:bg-red-500/10 hover:text-red-400 transition"><LogOut size={16} /></button>
+                 </div>
             </div>
         </div>
       </aside>
 
       {/* --- MAIN CONTENT AREA --- */}
-      <main className="flex-1 h-screen overflow-y-auto relative scrollbar-hide">
+      <main className="flex-1 h-screen overflow-y-auto relative scrollbar-hide bg-[#09090b]">
         
-        {/* Mobile Header (Hamburger) */}
-        <div className="md:hidden sticky top-0 z-30 bg-[#0f1115]/80 backdrop-blur-md p-4 flex justify-between items-center border-b border-white/5">
+        {/* Mobile Header */}
+        <div className="md:hidden sticky top-0 z-30 bg-[#09090b]/80 backdrop-blur-md p-4 flex justify-between items-center border-b border-white/5">
             <div className="flex items-center gap-2">
                 <div className="bg-indigo-600 p-1.5 rounded-lg"><BookOpen size={18}/></div>
                 <h1 className="font-bold">Mindful</h1>
@@ -318,112 +316,76 @@ const App = () => {
             <button onClick={() => setShowMobileMenu(!showMobileMenu)} className="p-2 text-white"><Menu size={24}/></button>
         </div>
 
-        {notification && <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'}`}>
+        {notification && <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right border border-white/10 ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-emerald-600 text-white'}`}>
             {notification.type === 'error' ? <AlertCircle size={20}/> : <CheckCircle size={20}/>}
             <span className="font-bold text-sm">{notification.message}</span>
         </div>}
 
-        <div className="p-6 max-w-4xl mx-auto pb-20">
+        <div className="p-6 max-w-5xl mx-auto pb-20">
             
-            {/* PROFILE TAB (Redesigned) */}
-            {activeTab === 'profile' && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {/* Header Image / Banner */}
-                    <div className="h-48 bg-gradient-to-r from-indigo-900 to-purple-900 rounded-3xl mb-12 relative shadow-lg">
-                        {/* THE BIG PROFILE PICTURE INTERACTION */}
-                        <div className="absolute -bottom-10 left-8">
-                            <div className="relative group">
-                                <img 
-                                    src={profile?.avatar_url || "https://via.placeholder.com/150"} 
-                                    onClick={() => setViewImage(profile.avatar_url)} // CLICK TO VIEW BOLD
-                                    className="w-32 h-32 rounded-full border-4 border-[#0f1115] object-cover shadow-2xl cursor-pointer transition transform hover:scale-105"
-                                />
-                                {/* Quick Edit Icon on Hover */}
-                                <button onClick={() => setIsEditingProfile(true)} className="absolute bottom-2 right-0 bg-indigo-600 text-white p-2 rounded-full shadow-lg hover:bg-indigo-500 transition border-2 border-[#0f1115]">
-                                    <Edit3 size={16}/>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-4 px-2 mb-8">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h2 className="text-3xl font-bold">{profile?.username || "Reader"}</h2>
-                                <p className="text-white/50 text-sm">Joined 2026 • {profile?.streak_count || 0} Day Streak 🔥</p>
-                            </div>
-                            {isEditingProfile && <button onClick={handleSaveProfile} className="bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded-full font-bold shadow-lg transition flex items-center gap-2"><Save size={16}/> Save Profile</button>}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* About Section */}
-                        <div className="bg-[#1a1d23] border border-white/5 p-6 rounded-3xl">
-                            <h3 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2"><User size={14}/> About Me</h3>
-                            {isEditingProfile ? (
-                                <textarea value={tempAbout} onChange={e => setTempAbout(e.target.value)} className="w-full bg-black/20 rounded-xl p-4 text-white border border-white/10 h-32 focus:outline-none focus:border-indigo-500" placeholder="Tell the club about yourself..."></textarea>
-                            ) : (
-                                <p className="text-white/80 leading-relaxed whitespace-pre-wrap">{profile?.about || "I am a mindful reader."}</p>
-                            )}
-                        </div>
-
-                        {/* Goals Section */}
-                        <div className="bg-[#1a1d23] border border-white/5 p-6 rounded-3xl">
-                            <h3 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2"><Trophy size={14}/> Reading Goals</h3>
-                            {isEditingProfile ? (
-                                <textarea value={tempGoal} onChange={e => setTempGoal(e.target.value)} className="w-full bg-black/20 rounded-xl p-4 text-white border border-white/10 h-32 focus:outline-none focus:border-emerald-500" placeholder="What do you want to achieve?"></textarea>
-                            ) : (
-                                <p className="text-white/80 leading-relaxed whitespace-pre-wrap">{profile?.joining_goal || "To read more books this year."}</p>
-                            )}
-                        </div>
-                    </div>
-                    
-                    {/* Image Upload Area only visible when editing */}
-                    {isEditingProfile && (
-                        <div className="mt-6 bg-[#1a1d23] border border-white/5 p-6 rounded-3xl">
-                            <h3 className="text-white/50 text-xs font-bold uppercase mb-4">Update Profile Picture</h3>
-                            <input type="file" accept="image/*" onChange={handleUpdateAvatar} className="w-full text-sm text-white/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500"/>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* DASHBOARD TAB */}
+            {/* DASHBOARD TAB (The "Fable" Upgrade) */}
             {activeTab === 'dashboard' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in">
                     {/* Main Feed Column */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <div className="bg-gradient-to-r from-indigo-900 to-slate-900 border border-white/10 rounded-3xl p-8 relative overflow-hidden shadow-2xl">
-                            <div className="flex gap-6 items-start relative z-10">
-                                {profile?.current_book_cover && <img src={profile.current_book_cover} className="w-24 h-36 object-cover rounded-lg shadow-2xl border border-white/10" />}
-                                <div className="flex-1">
-                                    <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Currently Reading</h3>
-                                    <h2 className="text-3xl font-bold mb-4 leading-tight">{profile?.current_book_title || "No Book Selected"}</h2>
-                                    {profile?.current_book_title && (
-                                        <div>
-                                            <div className="w-full bg-black/30 rounded-full h-3 mb-2 overflow-hidden"><div className="bg-indigo-500 h-full transition-all duration-1000" style={{width: `${(profile.current_page / (profile.total_pages || 1)) * 100}%`}}></div></div>
-                                            <div className="flex justify-between text-xs text-white/60 font-medium mb-4"><span>Page {profile.current_page} of {profile.total_pages}</span><span>{Math.round((profile.current_page / (profile.total_pages || 1)) * 100)}%</span></div>
-                                            <button onClick={() => { setTempPage(profile.current_page); setShowProgressModal(true); }} className="bg-white/10 hover:bg-white/20 px-6 py-2 rounded-full font-bold text-sm transition">Update Progress</button>
+                    <div className="lg:col-span-2 space-y-8">
+                        {/* 1. HERO TRACKER CARD */}
+                        <div className="bg-gradient-to-br from-indigo-900/50 to-[#09090b] border border-indigo-500/20 rounded-[2rem] p-8 relative overflow-hidden shadow-2xl">
+                             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/20 blur-[100px] rounded-full"></div>
+                             
+                             <div className="flex flex-col sm:flex-row gap-8 items-start relative z-10">
+                                {profile?.current_book_cover && <img src={profile.current_book_cover} className="w-32 h-48 object-cover rounded-xl shadow-2xl border border-white/10 -rotate-3 hover:rotate-0 transition duration-500" />}
+                                <div className="flex-1 space-y-4">
+                                    <div>
+                                        <h3 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2"><Play size={12} fill="currentColor"/> Now Reading</h3>
+                                        <h2 className="text-3xl font-black text-white leading-tight">{profile?.current_book_title || "No Book Selected"}</h2>
+                                    </div>
+                                    
+                                    {profile?.current_book_title ? (
+                                        <div className="bg-black/30 p-4 rounded-2xl border border-white/5 backdrop-blur-sm">
+                                            <div className="flex justify-between text-xs text-zinc-400 font-medium mb-2"><span>Page {profile.current_page}</span><span>{Math.round((profile.current_page / (profile.total_pages || 1)) * 100)}%</span></div>
+                                            <div className="w-full bg-white/5 rounded-full h-2 mb-4 overflow-hidden"><div className="bg-indigo-500 h-full transition-all duration-1000 shadow-[0_0_10px_rgba(99,102,241,0.5)]" style={{width: `${(profile.current_page / (profile.total_pages || 1)) * 100}%`}}></div></div>
+                                            <button onClick={() => { setTempPage(profile.current_page); setShowProgressModal(true); }} className="w-full bg-white text-black hover:bg-zinc-200 py-3 rounded-xl font-bold text-sm transition shadow-lg">Update Progress</button>
                                         </div>
+                                    ) : (
+                                        <button onClick={() => setActiveTab('library')} className="bg-white text-black hover:bg-zinc-200 px-8 py-3 rounded-xl font-bold text-sm transition shadow-lg">Choose from Library</button>
                                     )}
-                                    {!profile?.current_book_title && <button onClick={() => setActiveTab('library')} className="bg-indigo-600 hover:bg-indigo-500 px-6 py-2 rounded-full font-bold text-sm transition">Choose from Library</button>}
                                 </div>
                             </div>
                         </div>
+
+                        {/* 2. COMMUNITY BUZZ FEED (Filling the Empty Space) */}
+                        <div>
+                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Activity size={20} className="text-emerald-500"/> Community Buzz</h3>
+                            <div className="bg-[#121214] border border-white/5 rounded-[2rem] p-6 space-y-4">
+                                {chatMessages.slice(-3).reverse().map((msg, i) => (
+                                    <div key={i} className="flex gap-4 items-start p-3 hover:bg-white/5 rounded-2xl transition border-b border-white/5 last:border-0">
+                                        <img src={msg.avatar_url || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                                        <div>
+                                            <p className="text-sm text-zinc-300"><span className="font-bold text-white">{msg.username}</span> shared a thought in Chat:</p>
+                                            <p className="text-zinc-500 text-sm mt-1 line-clamp-2">"{msg.content}"</p>
+                                        </div>
+                                    </div>
+                                ))}
+                                {chatMessages.length === 0 && <p className="text-zinc-500 text-sm italic">No recent activity. Be the first to start a discussion!</p>}
+                                <button onClick={() => setActiveTab('chat')} className="w-full py-3 text-sm font-bold text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-xl transition mt-2">Join the Conversation →</button>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Side Column */}
+                    {/* Side Column (Stats & Live) */}
                     <div className="space-y-6">
-                        <div className="bg-[#1a1d23] border border-white/5 rounded-3xl p-6 text-center">
-                            <h3 className="text-white/40 text-xs font-bold uppercase mb-4">Your Streak</h3>
-                            <Flame size={48} className="text-orange-500 mx-auto mb-2"/>
-                            <div className="text-4xl font-black text-white">{profile?.streak_count || 1}</div>
-                            <p className="text-sm text-white/50">Days Active</p>
+                        <div className="bg-[#121214] border border-white/5 rounded-[2rem] p-8 text-center relative overflow-hidden group">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-red-500"></div>
+                            <h3 className="text-zinc-500 text-xs font-bold uppercase mb-4 tracking-widest">Your Consistency</h3>
+                            <Flame size={56} className="text-orange-500 mx-auto mb-4 drop-shadow-[0_0_15px_rgba(249,115,22,0.5)] group-hover:scale-110 transition"/>
+                            <div className="text-5xl font-black text-white mb-1">{profile?.streak_count || 1}</div>
+                            <p className="text-sm text-zinc-500 font-medium">Day Streak</p>
                         </div>
-                        <div className="bg-[#1a1d23] border border-white/5 rounded-3xl p-6 text-center">
-                            <h3 className="text-white/40 text-xs font-bold uppercase mb-4">Live Session</h3>
-                            <button onClick={() => window.open(PERMANENT_MEETING_LINK, '_blank')} className="w-full bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 py-4 rounded-2xl font-bold transition flex flex-col items-center gap-2">
-                                <Camera size={24}/>
+                        
+                        <div className="bg-[#121214] border border-white/5 rounded-[2rem] p-8 text-center">
+                            <h3 className="text-zinc-500 text-xs font-bold uppercase mb-4 tracking-widest">Live Session</h3>
+                            <button onClick={() => window.open(PERMANENT_MEETING_LINK, '_blank')} className="w-full bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white border border-emerald-500/20 py-6 rounded-2xl font-bold transition flex flex-col items-center gap-3 group">
+                                <Camera size={32} className="group-hover:scale-110 transition"/>
                                 <span>Join Live Room</span>
                             </button>
                         </div>
@@ -431,35 +393,97 @@ const App = () => {
                 </div>
             )}
 
-            {/* CHAT TAB */}
-            {activeTab === 'chat' && (
-                <div className="h-[calc(100vh-6rem)] flex flex-col bg-[#1a1d23] border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
-                    <div className="p-4 border-b border-white/5 bg-black/20 flex justify-between items-center">
-                        <div><h2 className="font-bold">Club Chat</h2><p className="text-xs text-white/40">Topic: {discussionTopic}</p></div>
-                        {isAdmin && <button onClick={() => {const t = prompt("New Topic"); if(t) setDiscussionTopic(t)}}><Edit3 size={16} className="text-white/30 hover:text-white"/></button>}
+            {/* PROFILE TAB */}
+            {activeTab === 'profile' && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* Header Image / Banner */}
+                    <div className="h-64 bg-gradient-to-r from-indigo-900 to-violet-900 rounded-[2.5rem] mb-16 relative shadow-2xl border border-white/5 overflow-hidden">
+                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                        {/* BIG PROFILE PICTURE */}
+                        <div className="absolute -bottom-14 left-10">
+                            <div className="relative group">
+                                <img 
+                                    src={profile?.avatar_url || "https://via.placeholder.com/150"} 
+                                    onClick={() => setViewImage(profile.avatar_url)} 
+                                    className="w-40 h-40 rounded-[2rem] border-[6px] border-[#09090b] object-cover shadow-2xl cursor-pointer transition transform hover:scale-105 hover:rotate-2"
+                                />
+                                <button onClick={() => setIsEditingProfile(true)} className="absolute bottom-2 -right-2 bg-white text-black p-3 rounded-xl shadow-lg hover:bg-zinc-200 transition border-4 border-[#09090b]">
+                                    <Edit3 size={18}/>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    {pinnedMessage && (
-                        <div className="bg-indigo-900/30 p-3 border-l-4 border-indigo-500 flex justify-between items-center">
-                            <p className="text-sm text-indigo-200 line-clamp-1"><Pin size={12} className="inline mr-2"/>{pinnedMessage.content}</p>
-                            {isAdmin && <button onClick={() => handlePinMessage(pinnedMessage)}><X size={14} className="text-white/50 hover:text-white"/></button>}
+
+                    <div className="mt-4 px-4 mb-8">
+                        <div className="flex justify-between items-start pl-48">
+                            <div>
+                                <h2 className="text-4xl font-black tracking-tight">{profile?.username || "Reader"}</h2>
+                                <p className="text-zinc-500 font-medium mt-1">Joined 2026 • {profile?.streak_count || 0} Day Streak 🔥</p>
+                            </div>
+                            {isEditingProfile && <button onClick={handleSaveProfile} className="bg-emerald-600 hover:bg-emerald-500 px-8 py-3 rounded-xl font-bold shadow-lg transition flex items-center gap-2"><Save size={18}/> Save Changes</button>}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
+                        {/* About Section */}
+                        <div className="bg-[#121214] border border-white/5 p-8 rounded-[2rem]">
+                            <h3 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-6 flex items-center gap-2"><User size={14}/> About Me</h3>
+                            {isEditingProfile ? (
+                                <textarea value={tempAbout} onChange={e => setTempAbout(e.target.value)} className="w-full bg-black/30 rounded-2xl p-4 text-white border border-white/10 h-32 focus:outline-none focus:border-indigo-500 transition resize-none" placeholder="Tell the club about yourself..."></textarea>
+                            ) : (
+                                <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap text-lg">{profile?.about || "I am a mindful reader."}</p>
+                            )}
+                        </div>
+
+                        {/* Goals Section */}
+                        <div className="bg-[#121214] border border-white/5 p-8 rounded-[2rem]">
+                            <h3 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-6 flex items-center gap-2"><Trophy size={14}/> Reading Goals</h3>
+                            {isEditingProfile ? (
+                                <textarea value={tempGoal} onChange={e => setTempGoal(e.target.value)} className="w-full bg-black/30 rounded-2xl p-4 text-white border border-white/10 h-32 focus:outline-none focus:border-emerald-500 transition resize-none" placeholder="What do you want to achieve?"></textarea>
+                            ) : (
+                                <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap text-lg">{profile?.joining_goal || "To read more books this year."}</p>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {isEditingProfile && (
+                        <div className="mt-8 bg-[#121214] border border-white/5 p-8 rounded-[2rem]">
+                            <h3 className="text-zinc-500 text-xs font-bold uppercase mb-4 tracking-widest">Update Profile Picture</h3>
+                            <input type="file" accept="image/*" onChange={handleUpdateAvatar} className="w-full text-sm text-zinc-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 transition"/>
                         </div>
                     )}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                </div>
+            )}
+
+            {/* CHAT TAB */}
+            {activeTab === 'chat' && (
+                <div className="h-[calc(100vh-6rem)] flex flex-col bg-[#121214] border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl">
+                    <div className="p-6 border-b border-white/5 bg-black/20 flex justify-between items-center backdrop-blur-md">
+                        <div><h2 className="font-bold text-lg">Club Chat</h2><p className="text-xs text-indigo-400 font-bold uppercase tracking-wider">Topic: {discussionTopic}</p></div>
+                        {isAdmin && <button onClick={() => {const t = prompt("New Topic"); if(t) setDiscussionTopic(t)}} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 transition"><Edit3 size={16} className="text-zinc-400"/></button>}
+                    </div>
+                    {pinnedMessage && (
+                        <div className="bg-indigo-500/10 p-4 border-l-4 border-indigo-500 flex justify-between items-center backdrop-blur-sm">
+                            <p className="text-sm text-indigo-200 line-clamp-1 font-medium"><Pin size={14} className="inline mr-2 fill-current"/>{pinnedMessage.content}</p>
+                            {isAdmin && <button onClick={() => handlePinMessage(pinnedMessage)}><X size={16} className="text-white/50 hover:text-white"/></button>}
+                        </div>
+                    )}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
                         {chatMessages.map(msg => (
-                             <div key={msg.id} className={`flex gap-3 ${msg.user_id === session.user.id ? 'flex-row-reverse' : ''}`}>
-                                 <img src={msg.avatar_url || "https://via.placeholder.com/40"} className="w-8 h-8 rounded-full bg-gray-700 object-cover"/>
-                                 <div className={`p-3 rounded-2xl max-w-[80%] text-sm ${msg.user_id === session.user.id ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white/10 text-white/90 rounded-tl-none'}`}>
-                                     <div className="flex justify-between items-center gap-4 mb-1"><span className="text-[10px] font-bold opacity-50">{msg.username}</span>{isAdmin && <button onClick={() => handlePinMessage(msg)}><Pin size={10} className={msg.is_pinned ? "text-indigo-300" : "text-white/20"}/></button>}</div>
-                                     <div className="break-words">{formatMessageContent(msg.content)}</div>
+                             <div key={msg.id} className={`flex gap-4 ${msg.user_id === session.user.id ? 'flex-row-reverse' : ''}`}>
+                                 <img src={msg.avatar_url || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full bg-zinc-800 object-cover border border-white/10"/>
+                                 <div className={`p-4 rounded-2xl max-w-[80%] text-sm shadow-md ${msg.user_id === session.user.id ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-[#1a1d23] text-zinc-200 rounded-tl-none border border-white/5'}`}>
+                                     <div className="flex justify-between items-center gap-4 mb-2"><span className="text-[10px] font-bold opacity-50 uppercase tracking-wider">{msg.username}</span>{isAdmin && <button onClick={() => handlePinMessage(msg)}><Pin size={12} className={msg.is_pinned ? "text-indigo-300 fill-current" : "text-zinc-600"}/></button>}</div>
+                                     <div className="break-words leading-relaxed">{formatMessageContent(msg.content)}</div>
                                  </div>
                              </div>
                         ))}
                         <div ref={chatBottomRef} />
                     </div>
                     <div className="p-4 bg-black/20 border-t border-white/5">
-                        <form onSubmit={handleSendMessage} className="flex gap-2">
-                             <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Type a message..." className="flex-1 bg-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:bg-white/10 transition"/>
-                             <button className="bg-indigo-600 p-3 rounded-xl hover:bg-indigo-500 transition"><Send size={18}/></button>
+                        <form onSubmit={handleSendMessage} className="flex gap-3">
+                             <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Type a message..." className="flex-1 bg-[#1a1d23] border border-white/5 rounded-xl px-4 py-4 text-sm focus:outline-none focus:border-indigo-500 transition text-white placeholder:text-zinc-600"/>
+                             <button className="bg-indigo-600 px-6 rounded-xl hover:bg-indigo-500 transition shadow-lg shadow-indigo-500/20"><Send size={20}/></button>
                         </form>
                     </div>
                 </div>
@@ -467,22 +491,23 @@ const App = () => {
 
             {/* LIBRARY TAB */}
             {activeTab === 'library' && (
-                <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-3xl font-bold">Library</h2>
-                        {isAdmin && <button onClick={() => setShowUploadForm(true)} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 transition"><Plus size={16}/> Add Book</button>}
+                <div className="space-y-8 animate-in fade-in">
+                    <div className="flex justify-between items-end">
+                        <div><h2 className="text-3xl font-black tracking-tight">Library</h2><p className="text-zinc-500 mt-1">{libraryBooks.length} Books Available</p></div>
+                        {isAdmin && <button onClick={() => setShowUploadForm(true)} className="bg-white text-black hover:bg-zinc-200 px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 transition shadow-lg"><Plus size={18}/> Add Book</button>}
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                          {libraryBooks.map(book => (
-                            <div key={book.id} className="group bg-[#1a1d23] border border-white/5 rounded-2xl p-3 hover:border-indigo-500/50 transition">
-                                <div className="aspect-[2/3] bg-black/50 rounded-xl mb-3 overflow-hidden relative shadow-lg">
+                            <div key={book.id} className="group bg-[#121214] border border-white/5 rounded-[1.5rem] p-4 hover:border-indigo-500/30 hover:-translate-y-1 transition duration-300 shadow-xl">
+                                <div className="aspect-[2/3] bg-black/50 rounded-2xl mb-4 overflow-hidden relative shadow-lg">
                                     <img src={book.cover} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                                    {isAdmin && <button onClick={(e) => { e.preventDefault(); handleDeleteBook(book.id); }} className="absolute top-2 right-2 bg-red-600/80 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition"><Trash2 size={14}/></button>}
+                                    {isAdmin && <button onClick={(e) => { e.preventDefault(); handleDeleteBook(book.id); }} className="absolute top-2 right-2 bg-red-500/90 text-white p-2.5 rounded-full opacity-0 group-hover:opacity-100 transition shadow-lg"><Trash2 size={16}/></button>}
                                 </div>
-                                <h3 className="font-bold text-sm line-clamp-1 mb-1">{book.title}</h3>
-                                <div className="flex flex-col gap-2 mt-2">
-                                     <button onClick={() => handleStartReading(book)} className="w-full bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white py-2 rounded-lg text-xs font-bold uppercase transition">Track</button>
-                                     <a href={book.pdf_url} target="_blank" className="text-center text-xs text-white/30 hover:text-white transition">Read PDF</a>
+                                <h3 className="font-bold text-sm line-clamp-1 mb-1 text-white">{book.title}</h3>
+                                <p className="text-xs text-zinc-500 mb-4">{book.author}</p>
+                                <div className="flex flex-col gap-2">
+                                     <button onClick={() => handleStartReading(book)} className="w-full bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600 hover:text-white py-3 rounded-xl text-xs font-bold uppercase transition">Track Reading</button>
+                                     <a href={book.pdf_url} target="_blank" className="text-center text-xs text-zinc-500 hover:text-white transition py-2">Read PDF</a>
                                 </div>
                             </div>
                          ))}
@@ -492,17 +517,19 @@ const App = () => {
             
             {/* VOTE TAB */}
             {activeTab === 'vote' && (
-                <div className="max-w-2xl mx-auto space-y-4">
-                    <h2 className="text-3xl font-bold mb-6">Vote for Next Month</h2>
+                <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in">
+                    <h2 className="text-3xl font-black mb-8 text-center">Vote for Next Month</h2>
                     {libraryBooks.sort((a,b) => ((b.voted_by?.length || 0) - (a.voted_by?.length || 0))).map((book, index) => (
-                        <div key={book.id} className="bg-[#1a1d23] border border-white/5 p-4 rounded-2xl flex items-center gap-4 hover:bg-white/5 transition">
-                             <div className={`text-2xl font-black w-8 text-center ${index === 0 ? 'text-yellow-500' : 'text-white/10'}`}>#{index + 1}</div>
-                             <img src={book.cover} className="w-12 h-16 object-cover rounded-md"/>
+                        <div key={book.id} className="bg-[#121214] border border-white/5 p-6 rounded-[2rem] flex items-center gap-6 hover:bg-white/5 transition group">
+                             <div className={`text-4xl font-black w-12 text-center ${index === 0 ? 'text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]' : 'text-zinc-700'}`}>#{index + 1}</div>
+                             <img src={book.cover} className="w-16 h-24 object-cover rounded-xl shadow-lg group-hover:scale-105 transition"/>
                              <div className="flex-1">
-                                 <h3 className="font-bold">{book.title}</h3>
-                                 <p className="text-sm text-white/40">{book.voted_by?.length || 0} Votes</p>
+                                 <h3 className="font-bold text-lg mb-1">{book.title}</h3>
+                                 <p className="text-sm text-zinc-500 font-medium">{book.voted_by?.length || 0} Votes</p>
                              </div>
-                             <button onClick={() => handleVote(book)} className={`px-4 py-2 rounded-full font-bold text-sm transition ${book.voted_by?.includes(session.user.id) ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/50 hover:text-white'}`}>Vote</button>
+                             <button onClick={() => handleVote(book)} className={`px-6 py-3 rounded-xl font-bold text-sm transition shadow-lg ${book.voted_by?.includes(session.user.id) ? 'bg-indigo-600 text-white' : 'bg-[#1a1d23] text-zinc-400 hover:bg-white hover:text-black'}`}>
+                                 {book.voted_by?.includes(session.user.id) ? "Voted" : "Vote"}
+                             </button>
                         </div>
                     ))}
                 </div>
@@ -511,38 +538,38 @@ const App = () => {
         </div>
       </main>
 
-      {/* --- MODALS --- */}
+      {/* --- MODALS (Glassmorphism) --- */}
       {viewImage && (
-            <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-8 animate-in fade-in" onClick={() => setViewImage(null)}>
-                <button className="absolute top-6 right-6 text-white/50 hover:text-white p-2 rounded-full bg-white/10"><X size={24}/></button>
-                <img src={viewImage} className="max-w-full max-h-full rounded-lg shadow-2xl border-2 border-white/10" onClick={(e) => e.stopPropagation()}/>
+            <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[100] flex items-center justify-center p-8 animate-in fade-in" onClick={() => setViewImage(null)}>
+                <button className="absolute top-6 right-6 text-white/50 hover:text-white p-3 rounded-full bg-white/10 transition"><X size={24}/></button>
+                <img src={viewImage} className="max-w-full max-h-full rounded-2xl shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()}/>
             </div>
       )}
 
       {showProgressModal && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in">
-                <div className="bg-[#1a1d23] border border-white/10 rounded-3xl w-full max-w-sm p-8 text-center">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-in fade-in">
+                <div className="bg-[#121214] border border-white/10 rounded-[2rem] w-full max-w-sm p-8 text-center shadow-2xl">
                     <h3 className="text-xl font-bold mb-2">Update Progress</h3>
-                    <p className="text-white/50 mb-6 text-sm">Reading <b>{profile.current_book_title}</b></p>
-                    <div className="text-5xl font-black mb-6 text-indigo-400">{tempPage}</div>
+                    <p className="text-zinc-500 mb-8 text-sm">Reading <b>{profile.current_book_title}</b></p>
+                    <div className="text-6xl font-black mb-8 text-indigo-500">{tempPage}</div>
                     <input type="range" min="0" max={profile.total_pages || 100} value={tempPage} onChange={(e) => setTempPage(e.target.value)} className="w-full accent-indigo-500 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer mb-8"/>
-                    <button onClick={handleUpdateProgress} className="w-full bg-indigo-600 font-bold py-3 rounded-xl mb-3">Save</button>
-                    <button onClick={() => setShowProgressModal(false)} className="text-white/40 text-sm">Cancel</button>
+                    <button onClick={handleUpdateProgress} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl mb-3 hover:scale-[1.02] transition shadow-lg shadow-indigo-500/20">Save Progress</button>
+                    <button onClick={() => setShowProgressModal(false)} className="text-zinc-500 text-sm hover:text-white transition">Cancel</button>
                 </div>
             </div>
       )}
       
       {showUploadForm && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in">
-            <div className="bg-[#1a1d23] border border-white/10 rounded-3xl w-full max-w-sm p-6 relative">
-              <button onClick={() => setShowUploadForm(false)} className="absolute top-4 right-4 text-white/30 hover:text-white"><X size={20}/></button>
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><UploadCloud size={20} className="text-indigo-500"/> Add Book</h3>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-in fade-in">
+            <div className="bg-[#121214] border border-white/10 rounded-[2rem] w-full max-w-sm p-8 shadow-2xl relative">
+              <button onClick={() => setShowUploadForm(false)} className="absolute top-6 right-6 text-zinc-500 hover:text-white"><X size={24}/></button>
+              <h3 className="text-xl font-bold mb-8 flex items-center gap-3"><UploadCloud size={24} className="text-indigo-500"/> Add to Library</h3>
               <form onSubmit={handleUploadBook} className="space-y-4">
-                <input type="text" value={newBookTitle} onChange={e => setNewBookTitle(e.target.value)} className="w-full p-4 bg-black/20 rounded-xl border border-white/10 text-white" placeholder="Book Title" />
-                <input type="text" value={newBookAuthor} onChange={e => setNewBookAuthor(e.target.value)} className="w-full p-4 bg-black/20 rounded-xl border border-white/10 text-white" placeholder="Author" />
-                <div className="p-4 border border-dashed border-white/20 rounded-xl text-center"><p className="text-xs text-white/40 mb-2">Book PDF</p><input type="file" accept="application/pdf" onChange={e => setSelectedPdf(e.target.files[0])} className="text-xs text-white/70 w-full" /></div>
-                <div className="p-4 border border-dashed border-white/20 rounded-xl text-center"><p className="text-xs text-white/40 mb-2">Cover Image</p><input type="file" accept="image/*" onChange={e => setSelectedCover(e.target.files[0])} className="text-xs text-white/70 w-full" /></div>
-                <button disabled={isUploading} className="w-full bg-emerald-600 font-bold py-3 rounded-xl hover:scale-[1.02] transition">{isUploading ? "Uploading..." : "Save Book"}</button>
+                <input type="text" value={newBookTitle} onChange={e => setNewBookTitle(e.target.value)} className="w-full p-4 bg-black/20 rounded-xl border border-white/10 text-white placeholder:text-zinc-600 focus:border-indigo-500 outline-none transition" placeholder="Book Title" />
+                <input type="text" value={newBookAuthor} onChange={e => setNewBookAuthor(e.target.value)} className="w-full p-4 bg-black/20 rounded-xl border border-white/10 text-white placeholder:text-zinc-600 focus:border-indigo-500 outline-none transition" placeholder="Author" />
+                <div className="p-6 border border-dashed border-white/10 rounded-xl text-center hover:bg-white/5 transition cursor-pointer"><p className="text-xs text-zinc-500 mb-2 font-bold uppercase">Book PDF</p><input type="file" accept="application/pdf" onChange={e => setSelectedPdf(e.target.files[0])} className="text-xs text-zinc-400 w-full" /></div>
+                <div className="p-6 border border-dashed border-white/10 rounded-xl text-center hover:bg-white/5 transition cursor-pointer"><p className="text-xs text-zinc-500 mb-2 font-bold uppercase">Cover Image</p><input type="file" accept="image/*" onChange={e => setSelectedCover(e.target.files[0])} className="text-xs text-zinc-400 w-full" /></div>
+                <button disabled={isUploading} className="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-zinc-200 transition shadow-lg mt-4">{isUploading ? "Uploading..." : "Save Book"}</button>
               </form>
             </div>
           </div>
