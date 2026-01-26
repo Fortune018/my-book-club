@@ -4,7 +4,7 @@ import {
   Home, BookOpen, Trophy, Plus, X, UploadCloud, 
   MessageCircle, Lock, User, LogOut, Send, Trash2, Edit3, Pin, Flame, 
   Smile, CheckCircle, AlertCircle, Sparkles, Play, Camera, 
-  Save, Layout, Menu, Activity, Heart, Award, BarChart2
+  Save, Layout, Menu, Activity, Heart, Award, BarChart2, Mic
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -112,6 +112,11 @@ const App = () => {
   }, [session]);
 
   useEffect(() => { if (chatBottomRef.current) chatBottomRef.current.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, activeTab]);
+
+  // --- DERIVED ACHIEVEMENTS (REAL LOGIC) ---
+  const hasVoted = libraryBooks.some(book => book.voted_by?.includes(session?.user?.id));
+  const hasChatted = chatMessages.some(msg => msg.user_id === session?.user?.id);
+  const sevenDayStreak = (profile?.streak_count || 0) >= 7;
 
   // --- ACTIONS ---
   const showNotification = (msg, type = 'success') => { setNotification({ message: msg, type }); setTimeout(() => setNotification(null), 4000); };
@@ -227,7 +232,7 @@ const App = () => {
 
   const handleDeleteBook = async (id) => { if(window.confirm("Delete book?")) { await supabase.from('books').delete().eq('id', id); fetchBooks(); }};
   const handleDeleteMessage = async (id) => { if(window.confirm("Delete msg?")) { setChatMessages(prev => prev.filter(m => m.id !== id)); await supabase.from('messages').delete().eq('id', id); }};
-  const handleSendMessage = async (e) => { e.preventDefault(); if (!newMessage.trim() || !profile) return; const msgText = newMessage; setNewMessage(""); setShowEmoji(false); const tempId = Date.now(); setChatMessages(prev => [...prev, { id: tempId, content: msgText, user_id: session.user.id, username: profile.username, avatar_url: profile.avatar_url, created_at: new Date().toISOString(), pending: true }]); await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Reader", avatar_url: profile.avatar_url }]); };
+  const handleSendMessage = async (e) => { e.preventDefault(); if (!newMessage.trim() || !profile) return; const msgText = newMessage; setNewMessage(""); const tempId = Date.now(); setChatMessages(prev => [...prev, { id: tempId, content: msgText, user_id: session.user.id, username: profile.username, avatar_url: profile.avatar_url, created_at: new Date().toISOString(), pending: true }]); await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Reader", avatar_url: profile.avatar_url }]); };
   async function fetchBooks() { const { data } = await supabase.from('books').select('*').order('id', { ascending: false }); setLibraryBooks(data || []); }
   async function fetchMessages() { const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true }); setChatMessages(data || []); }
   const handleAdminToggle = () => { if (isAdmin) setIsAdmin(false); else if (window.prompt("Admin PIN:") === ADMIN_PIN) { setIsAdmin(true); showNotification("Admin Active"); }};
@@ -468,15 +473,29 @@ const App = () => {
                         </div>
                     </div>
 
-                    {/* --- NEW FEATURE: ACHIEVEMENTS (Placeholders for now) --- */}
+                    {/* --- NEW FEATURE: REAL ACHIEVEMENTS --- */}
                     <div className="mt-8 bg-[#121214] border border-white/5 p-8 rounded-[2rem]">
                         <h3 className="text-zinc-500 text-xs font-bold uppercase mb-6 tracking-widest flex items-center gap-2"><Award size={16}/> Achievements</h3>
                         <div className="flex flex-wrap gap-4">
-                            {[{label: "Club Member", active: true, color: "text-yellow-500 bg-yellow-500/10"}, {label: "7-Day Streak", active: profile?.streak_count >= 7, color: "text-orange-500 bg-orange-500/10"}, {label: "First Voter", active: false, color: "text-indigo-500 bg-indigo-500/10"}, {label: "Bookworm", active: false, color: "text-emerald-500 bg-emerald-500/10"}].map((badge, i) => (
-                                <div key={i} className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 border ${badge.active ? `${badge.color} border-transparent` : 'bg-white/5 text-zinc-600 border-white/5 grayscale opacity-50'}`}>
-                                    <Award size={14} fill={badge.active ? "currentColor" : "none"}/ > {badge.label}
-                                </div>
-                            ))}
+                            {/* 1. CLUB MEMBER (Always Active) */}
+                            <div className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 border text-yellow-500 bg-yellow-500/10 border-transparent">
+                                <Award size={14} fill="currentColor"/> Club Member
+                            </div>
+
+                            {/* 2. STREAK MASTER (Dynamic) */}
+                            <div className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 border ${sevenDayStreak ? "text-orange-500 bg-orange-500/10 border-transparent" : "bg-white/5 text-zinc-600 border-white/5 grayscale opacity-50"}`}>
+                                <Flame size={14} fill={sevenDayStreak ? "currentColor" : "none"}/> On Fire (7 Days)
+                            </div>
+
+                            {/* 3. ACTIVE VOTER (Dynamic) */}
+                            <div className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 border ${hasVoted ? "text-indigo-500 bg-indigo-500/10 border-transparent" : "bg-white/5 text-zinc-600 border-white/5 grayscale opacity-50"}`}>
+                                <Trophy size={14} fill={hasVoted ? "currentColor" : "none"}/> Top Voter
+                            </div>
+
+                            {/* 4. SOCIAL BUTTERFLY (Dynamic) */}
+                            <div className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 border ${hasChatted ? "text-emerald-500 bg-emerald-500/10 border-transparent" : "bg-white/5 text-zinc-600 border-white/5 grayscale opacity-50"}`}>
+                                <MessageCircle size={14} fill={hasChatted ? "currentColor" : "none"}/> Chatterbox
+                            </div>
                         </div>
                     </div>
                     
