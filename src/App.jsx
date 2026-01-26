@@ -4,7 +4,7 @@ import {
   Home, BookOpen, Trophy, Plus, X, UploadCloud, 
   MessageCircle, Lock, User, LogOut, Send, Trash2, Edit3, Pin, Flame, 
   Smile, CheckCircle, AlertCircle, Sparkles, Play, Camera, 
-  Save, Layout, Menu, Activity, Heart
+  Save, Layout, Menu, Activity, Heart, Award, BarChart2
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -14,6 +14,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ADMIN_PIN = "2026"; 
 const PERMANENT_MEETING_LINK = "https://whereby.com/mindful-readers"; 
+
+// STATIC ASSETS
+const DEFAULT_COVER_IMAGE = "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?q=80&w=2428&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D";
 
 const App = () => {
   // --- STATES ---
@@ -43,7 +46,7 @@ const App = () => {
   const [viewImage, setViewImage] = useState(null); 
   const [tempAbout, setTempAbout] = useState("");
   const [tempGoal, setTempGoal] = useState("");
-  const [tempUsername, setTempUsername] = useState(""); // New state for editing username
+  const [tempUsername, setTempUsername] = useState("");
   
   // Progress States
   const [showProgressModal, setShowProgressModal] = useState(false);
@@ -192,12 +195,6 @@ const App = () => {
     await supabase.from('books').update({ voted_by: newVoters }).eq('id', book.id);
   };
 
-  const handleAdminStartLive = async () => {
-    const msgText = `🎥 We are starting LIVE now! Click the 'Join Live' button on the dashboard.`;
-    await supabase.from('messages').insert([{ content: msgText, user_id: session.user.id, username: profile.username || "Admin", avatar_url: profile.avatar_url, is_pinned: true }]);
-    window.open(PERMANENT_MEETING_LINK, '_blank');
-  };
-
   const handlePinMessage = async (msg) => {
       const newStatus = !msg.is_pinned;
       setChatMessages(prev => prev.map(m => m.id === msg.id ? { ...m, is_pinned: newStatus } : m));
@@ -324,7 +321,7 @@ const App = () => {
 
         <div className="p-6 max-w-5xl mx-auto pb-20">
             
-            {/* DASHBOARD TAB (The "Fable" Upgrade) */}
+            {/* DASHBOARD TAB */}
             {activeTab === 'dashboard' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in">
                     {/* Main Feed Column */}
@@ -354,7 +351,7 @@ const App = () => {
                             </div>
                         </div>
 
-                        {/* 2. COMMUNITY BUZZ FEED (Filling the Empty Space) */}
+                        {/* 2. COMMUNITY BUZZ FEED */}
                         <div>
                             <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Activity size={20} className="text-emerald-500"/> Community Buzz</h3>
                             <div className="bg-[#121214] border border-white/5 rounded-[2rem] p-6 space-y-4">
@@ -394,37 +391,41 @@ const App = () => {
                 </div>
             )}
 
-            {/* PROFILE TAB */}
+            {/* PROFILE TAB (The "Premium" Upgrade) */}
             {activeTab === 'profile' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {/* Header Image / Banner */}
-                    <div className="h-64 bg-gradient-to-r from-indigo-900 to-violet-900 rounded-[2.5rem] mb-16 relative shadow-2xl border border-white/5 overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                    {/* Header Image / Banner - CURATED STATIC IMAGE */}
+                    <div className="h-72 rounded-[2.5rem] mb-16 relative shadow-2xl border border-white/5 overflow-hidden group">
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/60 to-transparent z-10"></div>
+                        <img src={DEFAULT_COVER_IMAGE} className="w-full h-full object-cover contrast-125 brightness-75 group-hover:scale-105 transition duration-700"/>
+                        
                         {/* BIG PROFILE PICTURE */}
-                        <div className="absolute -bottom-14 left-10">
-                            <div className="relative group">
+                        <div className="absolute -bottom-14 left-10 z-20">
+                            <div className="relative group/avatar">
                                 <img 
                                     src={profile?.avatar_url || "https://via.placeholder.com/150"} 
                                     onClick={() => setViewImage(profile.avatar_url)} 
                                     className="w-40 h-40 rounded-[2rem] border-[6px] border-[#09090b] object-cover shadow-2xl cursor-pointer transition transform hover:scale-105 hover:rotate-2"
                                 />
-                                {/* Hidden input triggered by button below if needed, or keeping existing logic */}
                             </div>
                         </div>
                     </div>
 
-                    <div className="mt-4 px-4 mb-8">
+                    <div className="mt-4 px-4 mb-12">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:pl-48 gap-4">
                             <div>
                                 {isEditingProfile ? (
                                     <input value={tempUsername} onChange={e => setTempUsername(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-3xl font-black text-white focus:outline-none focus:border-indigo-500 w-full" placeholder="Username" />
                                 ) : (
-                                    <h2 className="text-4xl font-black tracking-tight">{profile?.username || "Reader"}</h2>
+                                    <h2 className="text-4xl font-black tracking-tight flex items-center gap-2">{profile?.username || "Reader"} <Award size={24} className="text-yellow-500 fill-yellow-500 drop-shadow-lg"/></h2>
                                 )}
-                                <p className="text-zinc-500 font-medium mt-1">Joined 2026 • {profile?.streak_count || 0} Day Streak 🔥</p>
+                                <p className="text-zinc-500 font-medium mt-2 flex items-center gap-4">
+                                    <span>Joined 2026</span>
+                                    <span className="flex items-center gap-1 text-orange-500"><Flame size={16} fill="currentColor"/> {profile?.streak_count || 0} Day Streak</span>
+                                </p>
                             </div>
                             
-                            {/* THE EDIT BUTTONS */}
+                            {/* EDIT BUTTONS */}
                             {isEditingProfile ? (
                                 <button onClick={handleSaveProfile} className="bg-emerald-600 hover:bg-emerald-500 px-8 py-3 rounded-xl font-bold shadow-lg transition flex items-center gap-2 text-white"><Save size={18}/> Save Changes</button>
                             ) : (
@@ -433,25 +434,49 @@ const App = () => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
+                    {/* --- NEW FEATURE: STATS BAR --- */}
+                    <div className="grid grid-cols-2 gap-6 mb-12 sm:pl-48">
+                        <div className="bg-[#121214] border border-white/5 p-6 rounded-2xl flex items-center gap-4">
+                            <div className="bg-indigo-500/20 p-3 rounded-xl text-indigo-400"><BookOpen size={24} /></div>
+                            <div><h3 className="text-2xl font-black">{libraryBooks.length > 0 ? "5+" : "0"}</h3><p className="text-xs text-zinc-500 font-bold uppercase">Books Read</p></div>
+                        </div>
+                        <div className="bg-[#121214] border border-white/5 p-6 rounded-2xl flex items-center gap-4">
+                            <div className="bg-emerald-500/20 p-3 rounded-xl text-emerald-400"><BarChart2 size={24} /></div>
+                            <div><h3 className="text-2xl font-black">{profile?.current_page || 0}</h3><p className="text-xs text-zinc-500 font-bold uppercase">Pages Logged</p></div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {/* About Section */}
-                        <div className="bg-[#121214] border border-white/5 p-8 rounded-[2rem]">
+                        <div className="bg-[#121214] border border-white/5 p-8 rounded-[2rem] h-full">
                             <h3 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-6 flex items-center gap-2"><User size={14}/> About Me</h3>
                             {isEditingProfile ? (
-                                <textarea value={tempAbout} onChange={e => setTempAbout(e.target.value)} className="w-full bg-black/30 rounded-2xl p-4 text-white border border-white/10 h-32 focus:outline-none focus:border-indigo-500 transition resize-none" placeholder="Tell the club about yourself..."></textarea>
+                                <textarea value={tempAbout} onChange={e => setTempAbout(e.target.value)} className="w-full bg-black/30 rounded-2xl p-4 text-white border border-white/10 h-40 focus:outline-none focus:border-indigo-500 transition resize-none" placeholder="Tell the club about yourself..."></textarea>
                             ) : (
                                 <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap text-lg">{profile?.about || "I am a mindful reader."}</p>
                             )}
                         </div>
 
                         {/* Goals Section */}
-                        <div className="bg-[#121214] border border-white/5 p-8 rounded-[2rem]">
+                        <div className="bg-[#121214] border border-white/5 p-8 rounded-[2rem] h-full">
                             <h3 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-6 flex items-center gap-2"><Trophy size={14}/> Reading Goals</h3>
                             {isEditingProfile ? (
-                                <textarea value={tempGoal} onChange={e => setTempGoal(e.target.value)} className="w-full bg-black/30 rounded-2xl p-4 text-white border border-white/10 h-32 focus:outline-none focus:border-emerald-500 transition resize-none" placeholder="What do you want to achieve?"></textarea>
+                                <textarea value={tempGoal} onChange={e => setTempGoal(e.target.value)} className="w-full bg-black/30 rounded-2xl p-4 text-white border border-white/10 h-40 focus:outline-none focus:border-emerald-500 transition resize-none" placeholder="What do you want to achieve?"></textarea>
                             ) : (
                                 <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap text-lg">{profile?.joining_goal || "To read more books this year."}</p>
                             )}
+                        </div>
+                    </div>
+
+                    {/* --- NEW FEATURE: ACHIEVEMENTS (Placeholders for now) --- */}
+                    <div className="mt-8 bg-[#121214] border border-white/5 p-8 rounded-[2rem]">
+                        <h3 className="text-zinc-500 text-xs font-bold uppercase mb-6 tracking-widest flex items-center gap-2"><Award size={16}/> Achievements</h3>
+                        <div className="flex flex-wrap gap-4">
+                            {[{label: "Club Member", active: true, color: "text-yellow-500 bg-yellow-500/10"}, {label: "7-Day Streak", active: profile?.streak_count >= 7, color: "text-orange-500 bg-orange-500/10"}, {label: "First Voter", active: false, color: "text-indigo-500 bg-indigo-500/10"}, {label: "Bookworm", active: false, color: "text-emerald-500 bg-emerald-500/10"}].map((badge, i) => (
+                                <div key={i} className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 border ${badge.active ? `${badge.color} border-transparent` : 'bg-white/5 text-zinc-600 border-white/5 grayscale opacity-50'}`}>
+                                    <Award size={14} fill={badge.active ? "currentColor" : "none"}/ > {badge.label}
+                                </div>
+                            ))}
                         </div>
                     </div>
                     
